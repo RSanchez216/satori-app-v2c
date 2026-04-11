@@ -201,6 +201,26 @@ body {
 }
 .btn-purple:hover { background: rgba(179,146,240,0.2); }
 
+/* ============================================================
+   FORM INPUTS
+   ============================================================ */
+.satori-input {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.satori-input::placeholder { color: var(--text-muted); }
+.satori-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(62, 207, 207, 0.12);
+}
+
 @layer utilities {
   .text-balance { text-wrap: balance; }
 }
