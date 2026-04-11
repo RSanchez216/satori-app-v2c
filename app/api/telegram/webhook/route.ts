@@ -13,10 +13,12 @@ export const runtime = 'nodejs'
  *  1. Validate the secret token (optional)
  *  2. Extract & normalize the message
  *  3. Look up the source by chat_id
- *  4. Save to `messages`
- *  5. Group into a `message_context` window
- *  6. Trigger AI analysis if the context is ready
- *  7. Return 200 immediately (Telegram requires a fast response)
+ *  4a. If NO source exists → auto-detect: insert inactive source record, return 200
+ *  4b. If source is inactive → still auto-detected/pending, return 200
+ *  5. Save to `messages`
+ *  6. Group into a `message_context` window
+ *  7. Trigger AI analysis if the context is ready
+ *  8. Return 200 immediately (Telegram requires a fast response)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -33,41 +35,68 @@ export async function POST(req: NextRequest) {
     const update: TelegramUpdate = await req.json()
     const tgMsg = update.message ?? update.channel_post
 
-    // Ignore non-text updates (stickers, polls, etc.)
-    if (!tgMsg) {
-      return NextResponse.json({ ok: true })
-    }
+    if (!tgMsg) return NextResponse.json({ ok: true })
 
     const text = tgMsg.text ?? tgMsg.caption ?? ''
-    if (!text.trim()) {
-      return NextResponse.json({ ok: true })
-    }
+    if (!text.trim()) return NextResponse.json({ ok: true })
 
-    // ── 3. Build normalized message ────────────────────────────────
-    const chatId  = String(tgMsg.chat.id)
+    const chatId    = String(tgMsg.chat.id)
+    const groupName = tgMsg.chat.title ?? null
+    const chatType  = tgMsg.chat.type  // 'private' | 'group' | 'supergroup' | 'channel'
+
     const senderName = tgMsg.from
       ? [tgMsg.from.first_name, tgMsg.from.last_name].filter(Boolean).join(' ')
-      : tgMsg.chat.title ?? 'Unknown'
+      : groupName ?? 'Unknown'
 
     const messageTs = new Date(tgMsg.date * 1000).toISOString()
 
     const supabase = createAdminClient()
 
-    // ── 4. Find source by external_id (chat_id) ─────────────────────
+    // ── 3. Find source by external_id (any is_active status) ────────
     const { data: source } = await supabase
       .from('sources')
-      .select('id, is_active, muted')
+      .select('id, is_active, muted, auto_detected')
       .eq('external_id', chatId)
       .eq('type', 'telegram')
       .single()
 
+    // ── 4a. No source at all → auto-detect ──────────────────────────
     if (!source) {
-      // No source registered for this chat — ignore silently
-      console.log(`[webhook] No source found for chat_id=${chatId}`)
+      // Only auto-detect actual groups/channels, not private DMs
+      if (chatType === 'group' || chatType === 'supergroup' || chatType === 'channel') {
+        const { error: insertErr } = await supabase.from('sources').insert({
+          name:                groupName ?? `Telegram Group ${chatId}`,
+          type:                'telegram',
+          external_id:         chatId,
+          telegram_group_id:   tgMsg.chat.id,
+          telegram_group_name: groupName,
+          is_active:           false,
+          muted:               false,
+          auto_detected:       true,
+          detected_at:         new Date().toISOString(),
+        })
+
+        if (insertErr) {
+          // Could be a race condition duplicate — that's fine, log and move on
+          console.log(`[webhook] auto-detect insert skipped for chat_id=${chatId}:`, insertErr.code)
+        } else {
+          console.log(`[webhook] Auto-detected new group: ${groupName} (${chatId})`)
+        }
+      } else {
+        console.log(`[webhook] No source found for chat_id=${chatId}, type=${chatType} — ignoring`)
+      }
+
       return NextResponse.json({ ok: true })
     }
 
+    // ── 4b. Source exists but not active (pending activation) ────────
     if (!source.is_active) {
+      console.log(`[webhook] Source ${source.id} is inactive (pending) — ignoring message`)
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── 4c. Source is muted ──────────────────────────────────────────
+    if (source.muted) {
       return NextResponse.json({ ok: true })
     }
 
@@ -90,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     if (msgErr || !savedMsg) {
       console.error('[webhook] Failed to save message:', msgErr)
-      return NextResponse.json({ ok: true })  // Still return 200 to Telegram
+      return NextResponse.json({ ok: true })
     }
 
     // ── 6. Group into context ──────────────────────────────────────
@@ -105,10 +134,8 @@ export async function POST(req: NextRequest) {
 
     const contextId = await groupMessageIntoContext(supabase, norm, savedMsg.id)
 
-    // ── 7. Respond 200 to Telegram immediately ─────────────────────
-    // Then trigger analysis asynchronously (fire-and-forget)
-    if (contextId && !source.muted) {
-      // Fetch updated context to check if analysis should run
+    // ── 7. Fire-and-forget analysis ────────────────────────────────
+    if (contextId) {
       const { data: ctx } = await supabase
         .from('message_contexts')
         .select('message_count, started_at, ai_status')
@@ -116,7 +143,6 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (ctx && ctx.ai_status !== 'processing' && shouldAnalyze(ctx.message_count, ctx.started_at)) {
-        // Re-fetch full context text for analysis
         const { data: fullCtx } = await supabase
           .from('message_contexts')
           .select('context_text, message_count')
@@ -124,7 +150,6 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (fullCtx?.context_text) {
-          // Fire-and-forget — don't await so Telegram gets 200 immediately
           analyzeContext(supabase, contextId, fullCtx.context_text, fullCtx.message_count)
             .catch((err) => console.error('[webhook] analyzeContext error:', err))
         }
@@ -135,12 +160,11 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     console.error('[webhook] Unhandled error:', err)
-    // Always return 200 to prevent Telegram from disabling the webhook
     return NextResponse.json({ ok: true })
   }
 }
 
-/** GET — health check so you can verify the endpoint is reachable */
+/** GET — health check */
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
