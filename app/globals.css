@@ -2,26 +2,205 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   SATORI DESIGN SYSTEM
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --bg-base:     #080d14;
+  --bg-surface:  #0d1117;
+  --bg-elevated: #111827;
+  --bg-card:     #111820;
+  --bg-hover:    #161e28;
+
+  /* Borders */
+  --border-subtle:  #1e2530;
+  --border-default: #243040;
+
+  /* Accent */
+  --accent:       #3ecfcf;
+  --accent-dim:   rgba(62, 207, 207, 0.12);
+  --accent-glow:  rgba(62, 207, 207, 0.25);
+  --accent-glow2: rgba(62, 207, 207, 0.08);
+
+  /* Text */
+  --text-primary:   #e6edf3;
+  --text-secondary: #8d96a0;
+  --text-muted:     #3a4555;
+
+  /* Severity */
+  --severity-critical: #f85149;
+  --severity-high:     #e3b341;
+  --severity-medium:   #3ecfcf;
+  --severity-low:      #56d364;
+
+  /* KB */
+  --kb-purple: #b392f0;
+  --kb-purple-dim: rgba(179, 146, 240, 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-inter, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
 }
 
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+/* Tori active pulse */
+@keyframes tori-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+.tori-pulse { animation: tori-pulse 2s ease-in-out infinite; }
+
+/* Accent glow breathe */
+@keyframes glow-breathe {
+  0%, 100% { box-shadow: 0 0 8px var(--accent-glow); }
+  50%       { box-shadow: 0 0 22px var(--accent-glow), 0 0 44px var(--accent-glow2); }
+}
+.accent-glow { animation: glow-breathe 3s ease-in-out infinite; }
+
+/* Page fade-in */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.25s ease-out both; }
+
+/* Stagger helper — apply to children */
+.stagger > * { animation: fade-up 0.25s ease-out both; }
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 40ms; }
+.stagger > *:nth-child(3)  { animation-delay: 80ms; }
+.stagger > *:nth-child(4)  { animation-delay: 120ms; }
+.stagger > *:nth-child(5)  { animation-delay: 160ms; }
+.stagger > *:nth-child(6)  { animation-delay: 200ms; }
+
+/* Card lift on hover */
+@keyframes card-lift {
+  to { transform: translateY(-2px); }
+}
+
+/* Status dot pulse (resolution timeline) */
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); }
+  50%       { box-shadow: 0 0 0 5px transparent; }
+}
+.status-pulse-dot {
+  animation: tori-pulse 1.8s ease-in-out infinite,
+             status-pulse 1.8s ease-in-out infinite;
+}
+
+/* ============================================================
+   TYPOGRAPHY UTILITIES
+   ============================================================ */
+.label-xs {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.heading-sm {
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   CARD BASE
+   ============================================================ */
+.satori-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.875rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+.satori-card:hover {
+  border-color: var(--border-default);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.45), 0 2px 4px rgba(0,0,0,0.25);
+}
+
+/* ============================================================
+   BUTTON BASE
+   ============================================================ */
+.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: #080d14;
+  border: none;
+  cursor: pointer;
+  transition: opacity 150ms ease, box-shadow 150ms ease;
+}
+.btn-accent:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.btn-ghost:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.btn-purple {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: var(--kb-purple-dim);
+  color: var(--kb-purple);
+  border: 1px solid rgba(179,146,240,0.25);
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+.btn-purple:hover { background: rgba(179,146,240,0.2); }
+
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
 }
