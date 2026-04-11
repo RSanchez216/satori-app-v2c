@@ -256,6 +256,18 @@ alter table reports enable row level security;
 alter table report_deliveries enable row level security;
 
 -- Permissive policies for development (lock down in production)
+-- Drop first so this script is safe to re-run
+drop policy if exists "Allow all" on sources;
+drop policy if exists "Allow all" on messages;
+drop policy if exists "Allow all" on message_contexts;
+drop policy if exists "Allow all" on topic_threads;
+drop policy if exists "Allow all" on ai_topics;
+drop policy if exists "Allow all" on knowledge_base_entries;
+drop policy if exists "Allow all" on alerts;
+drop policy if exists "Allow all" on tori_activity_log;
+drop policy if exists "Allow all" on reports;
+drop policy if exists "Allow all" on report_deliveries;
+
 create policy "Allow all" on sources for all using (true) with check (true);
 create policy "Allow all" on messages for all using (true) with check (true);
 create policy "Allow all" on message_contexts for all using (true) with check (true);
