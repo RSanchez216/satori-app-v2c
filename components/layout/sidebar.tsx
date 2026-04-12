@@ -42,7 +42,7 @@ export function Sidebar() {
     <aside
       className="flex flex-col flex-shrink-0"
       style={{
-        width: 220,
+        width: 232,
         background: '#0a0f18',
         borderRight: '1px solid #1a2332',
         height: '100vh',
@@ -55,8 +55,8 @@ export function Sidebar() {
         <Image
           src="/logo2.png"
           alt="SATORI"
-          width={42}
-          height={42}
+          width={32}
+          height={32}
           className="rounded-xl flex-shrink-0"
           priority
         />
