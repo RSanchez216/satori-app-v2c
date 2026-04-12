@@ -135,31 +135,102 @@ If quiet, say so and note what you're watching. Under 3500 characters total.`
 // ─── Email HTML template ──────────────────────────────────────────────────────
 
 function buildEmailHtml(message: string, briefingName: string, dateLabel: string): string {
-  const escaped = message
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>')
-  return `<!DOCTYPE html><html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#080d14;font-family:Inter,Helvetica,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#080d14;">
+  // Escape HTML entities, then split on double newlines for proper paragraph spacing
+  const safe = message
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  const paragraphs = safe
+    .split(/\n{2,}/)
+    .map(p =>
+      `<p style="font-size:14px;line-height:1.75;color:#4a5568;margin:0 0 16px;font-family:'Inter',Arial,sans-serif;">${
+        p.replace(/\n/g, '<br>')
+      }</p>`,
+    )
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+  <title>${briefingName} — ${dateLabel}</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:'Inter',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f6f8;min-width:100%;">
 <tr><td align="center" style="padding:32px 20px;">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-  <tr><td align="center" style="padding-bottom:24px;">
-    <span style="font-size:18px;font-weight:800;letter-spacing:0.28em;color:#3ecfcf;text-transform:uppercase;">SATORI</span>
-  </td></tr>
-  <tr><td style="background:#0d1117;border:1px solid #1e2530;border-radius:12px;padding:28px 32px;">
-    <p style="font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#4a5a6a;margin:0 0 6px;">${briefingName}</p>
-    <h1 style="font-size:20px;font-weight:800;color:#e6edf3;margin:0 0 18px;">${dateLabel}</h1>
-    <div style="height:1px;background:#1e2530;margin-bottom:18px;"></div>
-    <div style="font-size:14px;line-height:1.85;color:#c8d8e8;">${escaped}</div>
-  </td></tr>
-  <tr><td style="padding-top:18px;text-align:center;">
-    <p style="font-size:11px;color:#2a3545;margin:0;">Sent by Tori · SATORI Operations Intelligence</p>
-  </td></tr>
+<table width="600" cellpadding="0" cellspacing="0" border="0"
+  style="max-width:600px;width:100%;border-radius:16px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.10);">
+
+  <!-- Dark header -->
+  <tr>
+    <td style="background:#080d14;padding:28px 40px 24px;text-align:center;">
+      <img src="https://satori-app-v2c.vercel.app/logo.png" alt="SATORI"
+        height="48" style="display:block;margin:0 auto 12px;height:48px;">
+      <div style="font-family:'Rajdhani','Inter',Arial,sans-serif;font-size:24px;font-weight:700;
+        letter-spacing:0.15em;color:#3ecfcf;text-transform:uppercase;line-height:1;">
+        SATORI
+      </div>
+    </td>
+  </tr>
+
+  <!-- White card body -->
+  <tr>
+    <td style="background:#ffffff;padding:40px;">
+
+      <!-- Briefing name label -->
+      <p style="font-size:11px;font-weight:600;letter-spacing:0.10em;text-transform:uppercase;
+        color:#3ecfcf;margin:0 0 10px;font-family:'Inter',Arial,sans-serif;">
+        ${briefingName}
+      </p>
+
+      <!-- Date heading -->
+      <h1 style="font-size:22px;font-weight:700;color:#1a2332;margin:0 0 22px;
+        line-height:1.2;font-family:'Inter',Arial,sans-serif;">
+        ${dateLabel}
+      </h1>
+
+      <!-- Cyan accent divider -->
+      <div style="height:2px;background:#3ecfcf;margin-bottom:28px;border-radius:1px;"></div>
+
+      <!-- Briefing content from Tori -->
+      <div style="font-family:'Inter',Arial,sans-serif;">
+        ${paragraphs}
+      </div>
+
+    </td>
+  </tr>
+
+  <!-- Divider between body and footer -->
+  <tr>
+    <td style="background:#ffffff;padding:0 40px;">
+      <div style="height:1px;background:#e2e8f0;"></div>
+    </td>
+  </tr>
+
+  <!-- Dark footer -->
+  <tr>
+    <td style="background:#080d14;padding:24px 40px;text-align:center;">
+      <img src="https://satori-app-v2c.vercel.app/logo.png" alt=""
+        height="24" style="display:block;margin:0 auto 12px;height:24px;opacity:0.35;">
+      <p style="margin:0 0 5px;font-size:12px;color:#64748b;font-family:'Inter',Arial,sans-serif;">
+        Sent by Tori · SATORI Operations Intelligence
+      </p>
+      <p style="margin:0;font-size:11px;color:#475569;font-family:'Inter',Arial,sans-serif;">
+        info@satoriknows.com
+      </p>
+    </td>
+  </tr>
+
 </table>
 </td></tr>
 </table>
-</body></html>`
+
+</body>
+</html>`
 }
 
 // ─── Delivery helpers ─────────────────────────────────────────────────────────
