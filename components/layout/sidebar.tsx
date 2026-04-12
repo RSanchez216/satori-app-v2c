@@ -64,9 +64,9 @@ export function Sidebar() {
           className="leading-none text-[#3ecfcf]"
           style={{
             fontFamily: "'Rajdhani', var(--font-rajdhani), sans-serif",
-            fontSize: 22,
+            fontSize: 26,
             fontWeight: 700,
-            letterSpacing: '0.22em',
+            letterSpacing: '0.2em',
           }}
         >
           SATORI
