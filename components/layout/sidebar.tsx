@@ -51,22 +51,27 @@ export function Sidebar() {
       }}
     >
       {/* ── Logo zone ── */}
-      <div className="flex items-center gap-3 flex-shrink-0 px-4 border-b border-[#1a2332]" style={{ paddingTop: 18, paddingBottom: 18 }}>
+      <div
+        className="flex items-center flex-shrink-0 border-b border-[#1a2332]"
+        style={{ padding: '16px 16px', gap: 12 }}
+      >
         <Image
           src="/logo2.png"
           alt="SATORI"
-          width={32}
-          height={32}
+          width={44}
+          height={44}
           className="rounded-xl flex-shrink-0"
           priority
         />
         <span
-          className="leading-none text-[#3ecfcf]"
+          className="satori-wordmark"
           style={{
-            fontFamily: "'Rajdhani', var(--font-rajdhani), sans-serif",
-            fontSize: 26,
+            fontFamily: "'Rajdhani', sans-serif",
             fontWeight: 700,
-            letterSpacing: '0.2em',
+            fontSize: '24px',
+            letterSpacing: '0.25em',
+            color: '#3ecfcf',
+            lineHeight: 1,
           }}
         >
           SATORI

@@ -104,23 +104,29 @@ export function Topbar() {
         zIndex: 40,
       }}
     >
-      {/* Left — tagline */}
-      <div className="flex items-center gap-2 pl-2">
+      {/* Left — label + live indicator */}
+      <div className="flex items-center" style={{ paddingLeft: 24, gap: 0 }}>
         <span
           style={{
-            fontSize: 10,
+            fontSize: 9.5,
             fontWeight: 600,
-            letterSpacing: '0.18em',
+            letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            color: '#2a3a4a',
+            color: '#2a3545',
           }}
         >
           Operations Intelligence
         </span>
-        <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#2a3a4a', flexShrink: 0 }} />
-        <span style={{ fontSize: 10, color: '#2a3a4a', letterSpacing: '0.06em' }}>
-          Platform
-        </span>
+        {/* separator */}
+        <div style={{ width: 1, height: 12, background: '#1e2530', margin: '0 12px', flexShrink: 0 }} />
+        {/* live pulse */}
+        <div className="flex items-center" style={{ gap: 6 }}>
+          <div
+            className="animate-pulse rounded-full"
+            style={{ width: 6, height: 6, background: '#56d364', flexShrink: 0 }}
+          />
+          <span style={{ fontSize: 9, fontWeight: 500, color: '#3a4555' }}>Live</span>
+        </div>
       </div>
 
       {/* Right controls */}
