@@ -53,7 +53,7 @@ export function Sidebar() {
       {/* ── Logo zone ── */}
       <div className="flex items-center gap-3 flex-shrink-0 px-4 border-b border-[#1a2332]" style={{ paddingTop: 18, paddingBottom: 18 }}>
         <Image
-          src="/logo.png"
+          src="/logo2.png"
           alt="SATORI"
           width={42}
           height={42}
