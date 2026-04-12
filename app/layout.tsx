@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Rajdhani } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -10,6 +10,13 @@ const inter = Inter({
   display: 'swap',
 })
 
+const rajdhani = Rajdhani({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-rajdhani',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
   title: 'SATORI — AI Operations Intelligence',
   description: 'Proactive AI operations intelligence for trucking companies',
@@ -17,7 +24,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${rajdhani.variable}`}>
       <body className="antialiased font-inter">
           {children}
           <Toaster

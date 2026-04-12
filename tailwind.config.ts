@@ -10,7 +10,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        inter: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        inter:    ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        rajdhani: ['var(--font-rajdhani)', 'sans-serif'],
       },
       colors: {
         /* Base surfaces */

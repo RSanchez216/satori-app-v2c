@@ -51,23 +51,26 @@ export function Sidebar() {
       }}
     >
       {/* ── Logo zone ── */}
-      <div className="flex items-center gap-3 flex-shrink-0 px-4 py-3 border-b border-[#1a2332]">
+      <div className="flex items-center gap-3 flex-shrink-0 px-4 border-b border-[#1a2332]" style={{ paddingTop: 18, paddingBottom: 18 }}>
         <Image
           src="/logo.png"
           alt="SATORI"
-          width={36}
-          height={36}
+          width={42}
+          height={42}
           className="rounded-xl flex-shrink-0"
           priority
         />
-        <div className="flex flex-col">
-          <span className="text-[15px] font-black tracking-[0.2em] text-[#3ecfcf] leading-none">
-            SATORI
-          </span>
-          <span className="text-[9px] font-medium tracking-[0.12em] text-[#2a3a4a] uppercase leading-none mt-1">
-            Operations Intelligence
-          </span>
-        </div>
+        <span
+          className="leading-none text-[#3ecfcf]"
+          style={{
+            fontFamily: "'Rajdhani', var(--font-rajdhani), sans-serif",
+            fontSize: 22,
+            fontWeight: 700,
+            letterSpacing: '0.22em',
+          }}
+        >
+          SATORI
+        </span>
       </div>
 
       {/* ── Nav ── */}

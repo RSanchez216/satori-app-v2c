@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Bell, Settings, User, Send, ChevronRight, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
@@ -105,9 +104,23 @@ export function Topbar() {
         zIndex: 40,
       }}
     >
-      {/* Left — small logo for visual continuity */}
-      <div className="flex items-center gap-2">
-        <Image src="/logo.png" alt="" width={24} height={24} className="rounded-lg opacity-80" />
+      {/* Left — tagline */}
+      <div className="flex items-center gap-2 pl-2">
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: '#2a3a4a',
+          }}
+        >
+          Operations Intelligence
+        </span>
+        <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#2a3a4a', flexShrink: 0 }} />
+        <span style={{ fontSize: 10, color: '#2a3a4a', letterSpacing: '0.06em' }}>
+          Platform
+        </span>
       </div>
 
       {/* Right controls */}
