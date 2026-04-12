@@ -51,33 +51,23 @@ export function Sidebar() {
       }}
     >
       {/* ── Logo zone ── */}
-      <div
-        className="flex items-center flex-shrink-0"
-        style={{
-          height: 52,
-          borderBottom: '1px solid #1a2332',
-          padding: '0 16px',
-          gap: 10,
-        }}
-      >
+      <div className="flex items-center gap-3 flex-shrink-0 px-4 py-3 border-b border-[#1a2332]">
         <Image
           src="/logo.png"
           alt="SATORI"
-          width={22}
-          height={22}
-          className="rounded-md flex-shrink-0"
+          width={36}
+          height={36}
+          className="rounded-xl flex-shrink-0"
           priority
         />
-        <span
-          style={{
-            fontSize: 13,
-            fontWeight: 900,
-            letterSpacing: '0.15em',
-            color: '#3ecfcf',
-          }}
-        >
-          SATORI
-        </span>
+        <div className="flex flex-col">
+          <span className="text-[15px] font-black tracking-[0.2em] text-[#3ecfcf] leading-none">
+            SATORI
+          </span>
+          <span className="text-[9px] font-medium tracking-[0.12em] text-[#2a3a4a] uppercase leading-none mt-1">
+            Operations Intelligence
+          </span>
+        </div>
       </div>
 
       {/* ── Nav ── */}
@@ -87,12 +77,12 @@ export function Sidebar() {
             {/* Section label */}
             <p
               style={{
-                padding: '16px 16px 6px',
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: '0.1em',
+                padding: '16px 16px 5px',
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                color: '#2a3a4a',
+                color: '#2a3545',
               }}
             >
               {section.label}
@@ -115,7 +105,8 @@ export function Sidebar() {
                     borderRadius: active ? '0 7px 7px 0' : 7,
                     fontSize: 12.5,
                     fontWeight: active ? 600 : 500,
-                    color: active ? '#3ecfcf' : '#5a6a7a',
+                    letterSpacing: '0.01em',
+                    color: active ? '#e6edf3' : '#4a5a6a',
                     background: active
                       ? 'linear-gradient(90deg, rgba(62,207,207,0.12) 0%, rgba(62,207,207,0.04) 100%)'
                       : 'transparent',
@@ -133,13 +124,13 @@ export function Sidebar() {
                     if (!active) {
                       const el = e.currentTarget as HTMLAnchorElement
                       el.style.background = 'transparent'
-                      el.style.color = '#5a6a7a'
+                      el.style.color = '#4a5a6a'
                     }
                   }}
                 >
                   <Icon
-                    size={14}
-                    style={{ flexShrink: 0, opacity: active ? 1 : 0.65 }}
+                    size={13}
+                    style={{ flexShrink: 0, opacity: active ? 1 : 0.55 }}
                   />
                   <span className="flex-1 truncate">{item.label}</span>
                 </Link>
@@ -151,14 +142,11 @@ export function Sidebar() {
 
       {/* ── Bottom status ── */}
       <div
-        className="flex-shrink-0 space-y-3"
-        style={{
-          borderTop: '1px solid #1a2332',
-          padding: '12px 16px',
-        }}
+        className="flex-shrink-0"
+        style={{ borderTop: '1px solid #1a2332', padding: '10px 10px 12px' }}
       >
         {/* Live indicator */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 px-2 mb-2">
           <span
             className="w-1.5 h-1.5 rounded-full flex-shrink-0 tori-pulse"
             style={{ background: '#56d364' }}
@@ -169,27 +157,45 @@ export function Sidebar() {
         </div>
 
         {/* Tori row */}
-        <div className="flex items-center gap-2.5">
-          <div
-            className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[13px] leading-none"
-            style={{
-              background: 'linear-gradient(135deg, #1a2d3e, #0f1e2d)',
-              border: '1px solid rgba(62,207,207,0.3)',
-            }}
-          >
-            🤖
+        <div
+          className="flex items-center gap-2.5 rounded-lg cursor-pointer transition-all"
+          style={{ padding: '8px 10px' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+        >
+          <div className="relative flex-shrink-0">
+            <div
+              className="w-7 h-7 rounded-full flex items-center justify-center text-sm leading-none"
+              style={{
+                background: 'linear-gradient(135deg, #1a2d3e, #0f1e2d)',
+                border: '1px solid rgba(62,207,207,0.3)',
+              }}
+            >
+              🤖
+            </div>
+            <div
+              className="absolute rounded-full"
+              style={{
+                bottom: -1,
+                right: -1,
+                width: 9,
+                height: 9,
+                background: '#56d364',
+                border: '2px solid #0a0f18',
+              }}
+            />
           </div>
           <div className="flex-1 min-w-0">
-            <p style={{ fontSize: 12, fontWeight: 600, color: '#3ecfcf', lineHeight: 1.3 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: '#3ecfcf', lineHeight: 1 }}>
               Tori
-            </p>
-            <p style={{ fontSize: 10, color: '#3a4555', lineHeight: 1.3 }}>
+            </div>
+            <div style={{ fontSize: 10, color: '#3a4555', lineHeight: 1, marginTop: 3 }}>
               AI Operations Agent
-            </p>
+            </div>
           </div>
-          <span
-            className="w-1.5 h-1.5 rounded-full flex-shrink-0 tori-pulse"
-            style={{ background: '#3ecfcf' }}
+          <div
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse"
+            style={{ background: '#56d364' }}
           />
         </div>
       </div>

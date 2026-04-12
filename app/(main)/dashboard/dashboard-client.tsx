@@ -198,18 +198,26 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
       {/* ── Page header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1
-            style={{
-              fontSize: 18,
-              fontWeight: 800,
-              color: '#e8edf2',
-              letterSpacing: '-0.02em',
-              lineHeight: 1.2,
-            }}
-          >
-            Dashboard
-          </h1>
-          <p style={{ fontSize: 12, color: '#3a4a5a', marginTop: 3 }}>{today}</p>
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            <h1
+              style={{
+                fontSize: 20,
+                fontWeight: 900,
+                color: '#e6edf3',
+                letterSpacing: '-0.02em',
+                lineHeight: 1,
+              }}
+            >
+              Dashboard
+            </h1>
+            <span
+              className="animate-pulse rounded-full"
+              style={{ width: 6, height: 6, background: '#3ecfcf', display: 'inline-block', marginTop: 2, flexShrink: 0 }}
+            />
+          </div>
+          <p style={{ fontSize: 11, color: '#3a4555', fontWeight: 500, letterSpacing: '0.02em' }}>
+            {today} · {stats.openSituations > 0 ? `${stats.openSituations} open situations` : 'All clear'} · Tori active
+          </p>
         </div>
       </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Bell, Settings, User, Send, ChevronRight, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
@@ -104,8 +105,10 @@ export function Topbar() {
         zIndex: 40,
       }}
     >
-      {/* Left — intentionally empty */}
-      <div />
+      {/* Left — small logo for visual continuity */}
+      <div className="flex items-center gap-2">
+        <Image src="/logo.png" alt="" width={24} height={24} className="rounded-lg opacity-80" />
+      </div>
 
       {/* Right controls */}
       <div className="flex items-center" style={{ gap: 8 }}>
