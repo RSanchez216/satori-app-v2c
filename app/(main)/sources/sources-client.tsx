@@ -14,9 +14,10 @@ interface Props {
   initialSources: Source[]
   messageCountMap: Record<string, number>
   contextCountMap: Record<string, number>
+  lastMessageMap: Record<string, string>
 }
 
-export function SourcesClient({ initialSources, messageCountMap, contextCountMap }: Props) {
+export function SourcesClient({ initialSources, messageCountMap, contextCountMap, lastMessageMap }: Props) {
   const [sources, setSources]         = useState<Source[]>(initialSources)
   const [showModal, setShowModal]     = useState(false)
   const [newSourceId, setNewSourceId] = useState<string | null>(null)   // for highlight animation
@@ -224,6 +225,7 @@ export function SourcesClient({ initialSources, messageCountMap, contextCountMap
                 source={src}
                 messageCount={messageCountMap[src.id] ?? 0}
                 contextCount={contextCountMap[src.id] ?? 0}
+                lastMessageAt={lastMessageMap[src.id] ?? null}
                 onToggleActive={handleToggleActive}
                 onToggleMute={handleToggleMute}
                 onDelete={handleDelete}

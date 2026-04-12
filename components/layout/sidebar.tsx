@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -7,6 +8,7 @@ import {
   LayoutDashboard, Bot, AlertTriangle, BookOpen,
   Inbox, Bell, FileText, Radio, Tag,
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 const NAV = [
   {
@@ -37,6 +39,28 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const [activeCount, setActiveCount] = useState(0)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    async function fetchCount() {
+      const { count } = await supabase
+        .from('sources')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true)
+      setActiveCount(count ?? 0)
+    }
+
+    fetchCount()
+
+    const channel = supabase
+      .channel('sidebar-sources-count')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sources' }, fetchCount)
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   return (
     <aside
@@ -160,7 +184,7 @@ export function Sidebar() {
             style={{ background: '#56d364' }}
           />
           <span style={{ fontSize: 10, color: '#3a4555', fontWeight: 500 }}>
-            0 sources · Live
+            {activeCount} source{activeCount !== 1 ? 's' : ''} · Live
           </span>
         </div>
 
