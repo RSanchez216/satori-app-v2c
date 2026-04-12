@@ -211,7 +211,7 @@ export function SourcesClient({ initialSources, messageCountMap, contextCountMap
       {activeSources.length === 0 ? (
         detectedSources.length === 0 && <EmptyState onAdd={() => setShowModal(true)} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
           {activeSources.map((src) => (
             <div
               key={src.id}

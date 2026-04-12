@@ -41,7 +41,7 @@ export function SourceCard({
 
   return (
     <div
-      className="rounded-xl border overflow-hidden"
+      className="rounded-xl border overflow-hidden flex flex-col"
       style={{
         background: '#0d1117',
         borderColor: hovered ? 'rgba(62,207,207,0.25)' : '#1a2332',
@@ -59,7 +59,7 @@ export function SourceCard({
         style={{ background: source.is_active ? '#3ecfcf' : '#1a2332' }}
       />
 
-      <div style={{ padding: '16px 18px' }}>
+      <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
         {/* Header row */}
         <div className="flex items-start justify-between gap-3" style={{ marginBottom: 14 }}>
           <div className="flex items-center gap-3">
@@ -177,40 +177,44 @@ export function SourceCard({
           </div>
         </div>
 
-        {/* Stats row */}
-        <div
-          className="grid grid-cols-3 gap-3"
-          style={{
-            borderTop: '1px solid #111820',
-            paddingTop: 12,
-            opacity: hasActivity ? 1 : 0.6,
-          }}
-        >
-          <Stat
-            icon={<MessageSquare size={11} />}
-            label="Messages"
-            value={messageCount}
-            highlight={hasActivity}
-          />
-          <Stat
-            icon={<Layers size={11} />}
-            label="Contexts"
-            value={contextCount}
-          />
-          <Stat
-            icon={<Clock size={11} />}
-            label={lastActiveLabel}
-            value={lastActiveTime}
-            small
-          />
-        </div>
+        {/* Stats row — always at bottom */}
+        <div style={{ marginTop: 'auto' }}>
+          <div
+            className="grid grid-cols-3 gap-3"
+            style={{
+              borderTop: '1px solid #111820',
+              paddingTop: 12,
+              opacity: hasActivity ? 1 : 0.6,
+            }}
+          >
+            <Stat
+              icon={<MessageSquare size={11} />}
+              label="Messages"
+              value={messageCount}
+              highlight={hasActivity}
+            />
+            <Stat
+              icon={<Layers size={11} />}
+              label="Contexts"
+              value={contextCount}
+            />
+            <Stat
+              icon={<Clock size={11} />}
+              label={lastActiveLabel}
+              value={lastActiveTime}
+              small
+            />
+          </div>
 
-        {/* Waiting state */}
-        {!hasActivity && (
-          <p style={{ fontSize: 10, color: '#2a3545', fontStyle: 'italic', marginTop: 8 }}>
-            Waiting for messages…
-          </p>
-        )}
+          {/* Fixed-height row so all cards stay same height */}
+          <div style={{ height: 20, marginTop: 6 }}>
+            {!hasActivity && (
+              <p style={{ fontSize: 10, color: '#2a3545', fontStyle: 'italic' }}>
+                Waiting for messages…
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )
