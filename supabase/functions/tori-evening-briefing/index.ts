@@ -5,15 +5,17 @@
 // NEW: accepts { briefing_id } in the request body to use the
 // multi-briefing architecture (briefings + briefing_recipients tables).
 // Falls back to tori_settings for backward compatibility if no briefing_id.
+//
+// Optional: { test_recipient_id } to send only to one recipient (test mode).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ANTHROPIC_API_KEY       = Deno.env.get('ANTHROPIC_API_KEY')!
-const TELEGRAM_BOT_TOKEN      = Deno.env.get('TELEGRAM_BOT_TOKEN')!
-const SUPABASE_URL             = Deno.env.get('SUPABASE_URL')!
+const ANTHROPIC_API_KEY        = Deno.env.get('ANTHROPIC_API_KEY')!
+const TELEGRAM_BOT_TOKEN       = Deno.env.get('TELEGRAM_BOT_TOKEN')!
+const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const RESEND_API_KEY           = Deno.env.get('RESEND_API_KEY') ?? ''
-const FROM_EMAIL               = Deno.env.get('REPORTS_FROM_EMAIL') ?? 'info@satoriknows.com'
+const RESEND_API_KEY            = Deno.env.get('RESEND_API_KEY') ?? ''
+const FROM_EMAIL                = Deno.env.get('REPORTS_FROM_EMAIL') ?? 'info@satoriknows.com'
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 
@@ -24,7 +26,6 @@ function severitiesAtOrAbove(min: string): string[] {
   return idx === -1 ? SEVERITY_ORDER : SEVERITY_ORDER.slice(idx)
 }
 
-// Topic label → DB department name mapping
 function topicsToDepts(topics: string[]): string[] {
   const MAP: Record<string, string> = {
     dispatch: 'Dispatch', safety: 'Safety', fleet: 'Fleet',
@@ -135,7 +136,6 @@ If quiet, say so and note what you're watching. Under 3500 characters total.`
 // ─── Email HTML template ──────────────────────────────────────────────────────
 
 function buildEmailHtml(message: string, briefingName: string, dateLabel: string): string {
-  // Escape HTML entities, then split on double newlines for proper paragraph spacing
   const safe = message
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -181,22 +181,18 @@ function buildEmailHtml(message: string, briefingName: string, dateLabel: string
   <tr>
     <td style="background:#ffffff;padding:40px;">
 
-      <!-- Briefing name label -->
       <p style="font-size:11px;font-weight:600;letter-spacing:0.10em;text-transform:uppercase;
         color:#3ecfcf;margin:0 0 10px;font-family:'Inter',Arial,sans-serif;">
         ${briefingName}
       </p>
 
-      <!-- Date heading -->
       <h1 style="font-size:22px;font-weight:700;color:#1a2332;margin:0 0 22px;
         line-height:1.2;font-family:'Inter',Arial,sans-serif;">
         ${dateLabel}
       </h1>
 
-      <!-- Cyan accent divider -->
       <div style="height:2px;background:#3ecfcf;margin-bottom:28px;border-radius:1px;"></div>
 
-      <!-- Briefing content from Tori -->
       <div style="font-family:'Inter',Arial,sans-serif;">
         ${paragraphs}
       </div>
@@ -204,7 +200,6 @@ function buildEmailHtml(message: string, briefingName: string, dateLabel: string
     </td>
   </tr>
 
-  <!-- Divider between body and footer -->
   <tr>
     <td style="background:#ffffff;padding:0 40px;">
       <div style="height:1px;background:#e2e8f0;"></div>
@@ -235,23 +230,35 @@ function buildEmailHtml(message: string, briefingName: string, dateLabel: string
 
 // ─── Delivery helpers ─────────────────────────────────────────────────────────
 
-async function sendTelegram(chatId: string, text: string): Promise<boolean> {
-  const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text: text.length > 4000 ? text.slice(0, 3997) + '…' : text }),
-  })
-  return (await r.json()).ok === true
+async function sendTelegram(chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: text.length > 4000 ? text.slice(0, 3997) + '…' : text }),
+    })
+    const json = await r.json()
+    if (json.ok) return { ok: true }
+    return { ok: false, error: json.description ?? `Telegram error ${r.status}` }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Network error' }
+  }
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
-  if (!RESEND_API_KEY) { console.warn('RESEND_API_KEY not set'); return false }
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: `Tori <${FROM_EMAIL}>`, to: [to], subject, html }),
-  })
-  return r.ok
+async function sendEmail(to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+  if (!RESEND_API_KEY) return { ok: false, error: 'RESEND_API_KEY not configured' }
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: `Tori <${FROM_EMAIL}>`, to: [to], subject, html }),
+    })
+    if (r.ok) return { ok: true }
+    const json = await r.json().catch(() => ({}))
+    return { ok: false, error: json.message ?? json.name ?? `Resend error: HTTP ${r.status}` }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Network error' }
+  }
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -264,9 +271,11 @@ Deno.serve(async (req: Request) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
   let briefingId: string | null = null
+  let testRecipientId: string | null = null
   try {
     const body = await req.json().catch(() => ({}))
-    briefingId = body?.briefing_id ?? null
+    briefingId      = body?.briefing_id       ?? null
+    testRecipientId = body?.test_recipient_id ?? null
   } catch { /* no body */ }
 
   try {
@@ -282,24 +291,29 @@ Deno.serve(async (req: Request) => {
         })
       }
 
-      const { data: recipients } = await supabase
+      const { data: allRecipients } = await supabase
         .from('briefing_recipients')
         .select('*')
         .eq('briefing_id', briefingId)
         .eq('is_active', true)
 
-      if (!recipients?.length) throw new Error('No active recipients configured for this briefing')
+      if (!allRecipients?.length) throw new Error('No active recipients configured for this briefing')
+
+      // Apply test mode filter: only deliver to a single recipient
+      const recipients = testRecipientId
+        ? (allRecipients.filter(r => r.id === testRecipientId).length > 0
+            ? allRecipients.filter(r => r.id === testRecipientId)
+            : allRecipients.slice(0, 1))
+        : allRecipients
 
       const { start, end, date } = getDayRange(briefing.timezone ?? 'America/Chicago')
       const dateLabel = formatDateLabel(date)
       const timeLabel = getTimeLabel(briefing.timezone ?? 'America/Chicago')
 
-      // Build severity and topic filters
       const allowedSeverities = severitiesAtOrAbove(briefing.min_severity ?? 'low')
       const filterByDept      = !briefing.topics?.includes('all') && briefing.topics?.length > 0
       const allowedDepts      = filterByDept ? topicsToDepts(briefing.topics) : []
 
-      // Fetch data in parallel
       const [topAlertsRes, allAlertsRes, openRes, ctxRes, msgRes] = await Promise.all([
         supabase.from('alerts').select('title,severity,department')
           .in('severity', ['critical', 'high'])
@@ -344,7 +358,6 @@ Deno.serve(async (req: Request) => {
         severityCounts, topAlerts, contexts, openCount,
       })
 
-      // Generate message
       const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -359,30 +372,47 @@ Deno.serve(async (req: Request) => {
       const message: string = aiJson.content?.[0]?.text?.trim()
       if (!message) throw new Error('Empty Anthropic response')
 
-      // Deliver to each recipient
+      // Deliver to each recipient and record per-recipient results
       let succeeded = 0
       const sentTo: string[] = []
+      const recipientResults: Array<{
+        recipient_id: string; label: string | null
+        channel: string; target: string; status: string; error?: string
+      }> = []
+
       for (const r of recipients) {
-        let ok = false
+        let result: { ok: boolean; error?: string } = { ok: false, error: 'Unknown channel' }
+
         if (r.channel === 'telegram') {
-          ok = await sendTelegram(r.target, message)
+          result = await sendTelegram(r.target, message)
         } else if (r.channel === 'email') {
           const subject = `${briefing.name} — ${dateLabel}`
           const html    = buildEmailHtml(message, briefing.name, dateLabel)
-          ok = await sendEmail(r.target, subject, html)
+          result = await sendEmail(r.target, subject, html)
         }
-        if (ok) { succeeded++; sentTo.push(`${r.channel}:${r.target}`) }
+
+        if (result.ok) { succeeded++; sentTo.push(`${r.channel}:${r.target}`) }
+
+        recipientResults.push({
+          recipient_id: r.id,
+          label:        r.label ?? null,
+          channel:      r.channel,
+          target:       r.target,
+          status:       result.ok ? 'success' : 'failed',
+          ...(result.error ? { error: result.error } : {}),
+        })
       }
 
       const status = succeeded === 0 ? 'error' : succeeded < recipients.length ? 'partial' : 'success'
 
-      // Log to briefing_history
       await supabase.from('briefing_history').insert({
         briefing_id:          briefingId,
         status,
         recipients_attempted: recipients.length,
         recipients_succeeded: succeeded,
         message_preview:      message.slice(0, 200),
+        message_full_text:    message,
+        recipient_results:    recipientResults,
       })
 
       return new Response(JSON.stringify({
@@ -396,6 +426,7 @@ Deno.serve(async (req: Request) => {
         message_preview: message.slice(0, 200),
         alerts_today: allAlerts.length,
         contexts_analyzed: contexts.length,
+        test_mode: !!testRecipientId,
       }), { headers: { 'content-type': 'application/json' } })
     }
 
@@ -455,7 +486,7 @@ Deno.serve(async (req: Request) => {
     const message: string = aiJson.content?.[0]?.text?.trim()
     if (!message) throw new Error('Empty Anthropic response')
 
-    await sendTelegram(chatId, message)
+    const tgResult = await sendTelegram(chatId, message)
 
     await supabase.from('tori_activity_log').insert({
       activity_type: 'evening_briefing',
@@ -465,7 +496,7 @@ Deno.serve(async (req: Request) => {
     })
 
     return new Response(JSON.stringify({
-      ok: true, telegram_sent: true, chat_id: chatId,
+      ok: tgResult.ok, telegram_sent: tgResult.ok, chat_id: chatId,
       message_preview: message.slice(0, 200),
       alerts_today: allAlerts.length,
       contexts_analyzed: (ctxRes.data ?? []).length,
@@ -475,9 +506,8 @@ Deno.serve(async (req: Request) => {
     const error = err instanceof Error ? err.message : String(err)
     console.error('[tori-evening-briefing]', error)
 
-    // Log failure
     const failPayload = briefingId
-      ? { briefing_id: briefingId, status: 'error', recipients_attempted: 0, recipients_succeeded: 0, error_message: error }
+      ? { briefing_id: briefingId, status: 'error', recipients_attempted: 0, recipients_succeeded: 0, error_message: error, recipient_results: [] }
       : { activity_type: 'evening_briefing_error', title: 'Evening Briefing Failed', description: error, status: 'failed' }
 
     const table = briefingId ? 'briefing_history' : 'tori_activity_log'

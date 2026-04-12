@@ -5,15 +5,19 @@ export const runtime = 'nodejs'
 /**
  * POST /api/tori/briefings/[id]/send
  * Immediately triggers the tori-evening-briefing edge function for a specific briefing.
+ * Accepts optional { test_recipient_id } to send only to one recipient (test mode).
  */
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabaseUrl      = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceRoleKey   = process.env.SUPABASE_SERVICE_ROLE_KEY!
-    const fnUrl            = `${supabaseUrl}/functions/v1/tori-evening-briefing`
+    const supabaseUrl    = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    const fnUrl          = `${supabaseUrl}/functions/v1/tori-evening-briefing`
+
+    const body = await req.json().catch(() => ({}))
+    const testRecipientId: string | undefined = body?.test_recipient_id
 
     const res = await fetch(fnUrl, {
       method:  'POST',
@@ -21,7 +25,10 @@ export async function POST(
         'Authorization': `Bearer ${serviceRoleKey}`,
         'Content-Type':  'application/json',
       },
-      body: JSON.stringify({ briefing_id: params.id }),
+      body: JSON.stringify({
+        briefing_id: params.id,
+        ...(testRecipientId ? { test_recipient_id: testRecipientId } : {}),
+      }),
     })
 
     const data = await res.json().catch(() => ({

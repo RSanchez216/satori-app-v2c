@@ -221,6 +221,15 @@ export interface BriefingRecipient {
   is_active: boolean
 }
 
+export interface RecipientResult {
+  recipient_id: string
+  label: string | null
+  channel: 'telegram' | 'email'
+  target: string
+  status: 'success' | 'failed'
+  error?: string
+}
+
 export interface BriefingHistory {
   id: string
   briefing_id: string | null
@@ -229,6 +238,8 @@ export interface BriefingHistory {
   recipients_attempted: number
   recipients_succeeded: number
   message_preview: string | null
+  message_full_text: string | null
+  recipient_results: RecipientResult[]
   error_message: string | null
   briefings?: { name: string } | null
 }

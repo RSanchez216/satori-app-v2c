@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
         topics:      topics      ?? ['all'],
         departments: departments ?? [],
         min_severity: min_severity ?? 'low',
+        ...(body.is_enabled !== undefined ? { is_enabled: body.is_enabled } : {}),
       })
       .select()
       .single()
