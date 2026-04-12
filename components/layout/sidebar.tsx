@@ -64,12 +64,12 @@ export function Sidebar() {
           priority
         />
         <span
-          className="satori-wordmark"
+          className="satori-brand"
           style={{
             fontFamily: "'Rajdhani', sans-serif",
             fontWeight: 700,
-            fontSize: '24px',
-            letterSpacing: '0.25em',
+            fontSize: '26px',
+            letterSpacing: '0.28em',
             color: '#3ecfcf',
             lineHeight: 1,
           }}
