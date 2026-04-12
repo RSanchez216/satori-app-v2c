@@ -28,7 +28,7 @@ export async function groupMessageIntoContext(
     .eq('source_id', msg.source_id)
     .single()
 
-  const senderLine  = `[${msg.sender_name}]: ${msg.message_text}`
+  const senderLine  = `${msg.sender_name}: ${msg.message_text}`
   const preview     = msg.message_text.slice(0, 140)
 
   if (existing) {
