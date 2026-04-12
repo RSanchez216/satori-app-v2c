@@ -9,7 +9,6 @@ import {
   Inbox, Bell, FileText, Radio, Tag,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { useTheme } from '@/components/theme-provider'
 
 const NAV = [
   {
@@ -41,8 +40,6 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname()
   const [activeCount, setActiveCount] = useState(0)
-  const { theme } = useTheme()
-
   useEffect(() => {
     const supabase = createClient()
 
@@ -64,8 +61,6 @@ export function Sidebar() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  const logoSrc = theme === 'light' ? '/logo3.jpg' : '/logo.png'
-
   return (
     <aside
       className="flex flex-col flex-shrink-0"
@@ -84,17 +79,25 @@ export function Sidebar() {
         style={{ padding: '16px 16px', gap: 12, borderBottom: '1px solid var(--border-subtle)' }}
       >
         <Image
-          src={logoSrc}
+          src="/logo.png"
           alt="SATORI"
           width={44}
           height={44}
-          className="rounded-xl flex-shrink-0"
+          className="rounded-xl flex-shrink-0 logo-dark"
+          priority
+        />
+        <Image
+          src="/logo3.jpg"
+          alt="SATORI"
+          width={44}
+          height={44}
+          className="rounded-xl flex-shrink-0 logo-light"
           priority
         />
         <span
           className="satori-brand"
           style={{
-            fontFamily: "'Rajdhani', sans-serif",
+            fontFamily: "var(--font-rajdhani), 'Rajdhani', sans-serif",
             fontWeight: 700,
             fontSize: '26px',
             letterSpacing: '0.28em',

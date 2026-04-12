@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@700&display=swap');
-
 .satori-brand {
-  font-family: 'Rajdhani', sans-serif !important;
+  font-family: var(--font-rajdhani), 'Rajdhani', sans-serif !important;
   font-weight: 700 !important;
   font-size: 26px !important;
   letter-spacing: 0.28em !important;
@@ -173,6 +171,14 @@ body {
 /* ============================================================
    ANIMATIONS
    ============================================================ */
+
+/* ── Logo theme switching (CSS-driven, no React state needed) ── */
+/* Dark mode (default): show dark logo, hide light logo */
+.logo-light { display: none; }
+.logo-dark  { display: block; }
+/* Light mode: swap */
+html:not(.dark) .logo-light { display: block; }
+html:not(.dark) .logo-dark  { display: none; }
 
 /* Tori active pulse */
 @keyframes tori-pulse {

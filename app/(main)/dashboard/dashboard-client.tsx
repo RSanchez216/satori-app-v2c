@@ -1,21 +1,23 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow, format } from 'date-fns'
 import {
   Phone, Eye, FileText, AlertTriangle, CheckCircle2,
-  Activity, ShieldCheck, Brain, Bot, ChevronRight, Zap,
+  Activity, ShieldCheck, Brain, Bot, ChevronRight, Zap, RefreshCw,
 } from 'lucide-react'
 import { SeverityBadge } from '@/components/ui/severity-badge'
-import type { TopicThread, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
+import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
 
 interface Props {
   stats: DashboardStats
-  openThreads: (TopicThread & { source?: Source })[]
-  recentAlerts: Alert[]
-  sources: Source[]
+  toriBannerMessage: string
+  openContexts: (MessageContext & { source?: Source })[]
+  recentAlerts: (Alert & { source?: Source })[]
   toriActivity: ToriActivityLog[]
-  brainStatus: { kbRulesActive: number; threadsToday: number; aiSuggestionsPending: number }
+  activeSources: (Source & { messagesCount: number })[]
+  brainStatus: { kbRulesActive: number; messagesCount: number; contextsBuilt: number; topicsTracked: number }
 }
 
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
@@ -165,13 +167,6 @@ function HealthRing({ score }: { score: number }) {
 }
 
 /* ─── Misc configs ───────────────────────────────────────────────────────── */
-const threadStatusConfig = {
-  open:       { label: 'Open',       color: 'var(--accent)',            icon: Activity },
-  escalated:  { label: 'Escalated',  color: 'var(--severity-critical)', icon: AlertTriangle },
-  unresolved: { label: 'Unresolved', color: 'var(--severity-high)',     icon: AlertTriangle },
-  resolved:   { label: 'Resolved',   color: 'var(--severity-low)',      icon: CheckCircle2 },
-}
-
 const activityTypeConfig: Record<string, { label: string; color: string }> = {
   call_outbound:  { label: 'Call Out',  color: 'var(--accent)' },
   call_inbound:   { label: 'Call In',   color: 'var(--severity-low)' },
@@ -182,6 +177,13 @@ const activityTypeConfig: Record<string, { label: string; color: string }> = {
   alert:          { label: 'Alert',     color: 'var(--severity-high)' },
 }
 
+const severityIconConfig: Record<string, { icon: React.ElementType; color: string }> = {
+  critical: { icon: AlertTriangle, color: 'var(--severity-critical)' },
+  high:     { icon: AlertTriangle, color: 'var(--severity-high)' },
+  medium:   { icon: Activity,      color: 'var(--severity-medium)' },
+  low:      { icon: Activity,      color: 'var(--severity-low)' },
+}
+
 const sourceTypeColor: Record<string, string> = {
   telegram: 'var(--accent)',
   email:    'var(--kb-purple)',
@@ -190,7 +192,47 @@ const sourceTypeColor: Record<string, string> = {
 }
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
-export function DashboardClient({ stats, openThreads, recentAlerts, sources, toriActivity, brainStatus }: Props) {
+export function DashboardClient(initialData: Props) {
+  const [data, setData] = useState<Props>(initialData)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  const [secondsAgo, setSecondsAgo] = useState(0)
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const res = await fetch('/api/dashboard/stats')
+      if (res.ok) {
+        const json = await res.json()
+        setData(json)
+        setLastUpdated(new Date())
+        setSecondsAgo(0)
+      }
+    } catch {
+      // silent fail — keep showing stale data
+    } finally {
+      setRefreshing(false)
+    }
+  }, [])
+
+  // Set initial lastUpdated client-side only (avoids hydration mismatch)
+  useEffect(() => { setLastUpdated(new Date()) }, [])
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(refresh, 60_000)
+    return () => clearInterval(interval)
+  }, [refresh])
+
+  // Tick the "X seconds ago" counter
+  useEffect(() => {
+    const tick = setInterval(() => {
+      if (lastUpdated) setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [lastUpdated])
+
+  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus } = data
   const today = format(new Date(), 'EEEE, MMMM d')
 
   return (
@@ -219,6 +261,33 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.02em' }}>
             {today} · {stats.openSituations > 0 ? `${stats.openSituations} open situations` : 'All clear'} · Tori active
           </p>
+        </div>
+
+        {/* Refresh controls */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {lastUpdated && (
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>
+              Updated {secondsAgo < 60 ? `${secondsAgo}s ago` : formatDistanceToNow(lastUpdated, { addSuffix: true })}
+            </span>
+          )}
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className="flex items-center justify-center rounded-lg transition-colors"
+            style={{
+              width: 28,
+              height: 28,
+              color: 'var(--text-muted)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              cursor: refreshing ? 'default' : 'pointer',
+              opacity: refreshing ? 0.6 : 1,
+            }}
+            onMouseEnter={(e) => { if (!refreshing) (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+          </button>
         </div>
       </div>
 
@@ -299,27 +368,9 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
               </span>
             </div>
 
-            {stats.openSituations === 0 && stats.kbViolations === 0 ? (
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                Good morning. All systems nominal — no open situations or compliance flags. Connect your first source below to start monitoring your fleet communications.
-              </p>
-            ) : (
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                You have{' '}
-                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                  {stats.openSituations} open situation{stats.openSituations !== 1 ? 's' : ''}
-                </span>
-                {stats.kbViolations > 0 && (
-                  <>
-                    {' '}and{' '}
-                    <span style={{ color: 'var(--severity-critical)', fontWeight: 600 }}>
-                      {stats.kbViolations} KB violation{stats.kbViolations !== 1 ? 's' : ''}
-                    </span>
-                  </>
-                )}
-                {' '}requiring attention. I've analyzed all incoming communications and flagged the items that need your review.
-              </p>
-            )}
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+              {toriBannerMessage}
+            </p>
 
             <div className="flex flex-wrap gap-2 mt-4">
               <Link href="/briefing">
@@ -342,7 +393,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                   <Phone size={12} /> Call Tori
                 </button>
               </Link>
-              <Link href="/situations">
+              <Link href="/inbox">
                 <button
                   style={{
                     display: 'flex',
@@ -399,7 +450,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           value={stats.resolvedToday}
           icon={CheckCircle2}
           glowColor="#56d364"
-          subtext="Since midnight"
+          subtext="Since midnight CT"
         />
         <StatCard
           label="Health Score"
@@ -430,7 +481,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
               Open Situations
             </span>
             <Link
-              href="/situations"
+              href="/inbox"
               className="flex items-center gap-1"
               style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}
             >
@@ -439,7 +490,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           </div>
 
           <div>
-            {openThreads.length === 0 ? (
+            {openContexts.length === 0 ? (
               <EmptyState
                 icon={AlertTriangle}
                 title="No open situations"
@@ -448,13 +499,14 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                 cta="Add source"
               />
             ) : (
-              openThreads.map((thread) => {
-                const status = threadStatusConfig[thread.status] ?? threadStatusConfig.open
-                const StatusIcon = status.icon
+              openContexts.map((ctx) => {
+                const cfg = severityIconConfig[ctx.severity as string] ?? { icon: Activity, color: 'var(--text-muted)' }
+                const StatusIcon = cfg.icon
+                const title = ctx.summary ?? ctx.context_preview ?? `Context ${ctx.id.slice(-6)}`
                 return (
                   <Link
-                    key={thread.id}
-                    href={`/situations/${thread.id}`}
+                    key={ctx.id}
+                    href="/inbox"
                     className="flex items-start gap-3 transition-colors"
                     style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.018)' }}
@@ -462,20 +514,23 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                   >
                     <StatusIcon
                       size={14}
-                      style={{ color: status.color, marginTop: 1, flexShrink: 0 }}
+                      style={{ color: cfg.color, marginTop: 1, flexShrink: 0 }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {thread.title}
+                        {title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        {thread.department && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{thread.department}</span>
+                        {ctx.source?.name && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ctx.source.name}</span>
                         )}
-                        {thread.severity_peak && (
-                          <SeverityBadge severity={thread.severity_peak as AlertSeverity} />
+                        {ctx.department && (
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ctx.department}</span>
                         )}
-                        {thread.kb_flagged && (
+                        {ctx.severity && (
+                          <SeverityBadge severity={ctx.severity as AlertSeverity} />
+                        )}
+                        {ctx.alert_worthy && (
                           <span
                             style={{
                               fontSize: 10,
@@ -486,13 +541,13 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                               fontWeight: 600,
                             }}
                           >
-                            KB
+                            Alert
                           </span>
                         )}
                       </div>
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
-                      {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(ctx.started_at ?? ctx.created_at), { addSuffix: true })}
                     </span>
                   </Link>
                 )
@@ -662,7 +717,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           </div>
 
           <div style={{ padding: '12px 20px' }}>
-            {sources.length === 0 ? (
+            {activeSources.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '8px 0' }}>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>No sources connected</p>
                 <Link href="/sources">
@@ -684,7 +739,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {sources.map((src) => {
+                {activeSources.map((src) => {
                   const dot = sourceTypeColor[src.type] ?? 'var(--text-muted)'
                   return (
                     <div key={src.id} className="flex items-center gap-2.5">
@@ -707,16 +762,12 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                       <span
                         style={{
                           fontSize: 10,
-                          padding: '1px 6px',
-                          borderRadius: 4,
-                          background: `${dot}15`,
-                          color: dot,
-                          fontWeight: 600,
+                          color: 'var(--text-muted)',
                           flexShrink: 0,
-                          textTransform: 'capitalize',
+                          fontWeight: 500,
                         }}
                       >
-                        {src.type}
+                        {src.messagesCount > 0 ? `${src.messagesCount} msg` : '—'}
                       </span>
                     </div>
                   )
@@ -739,13 +790,14 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           </div>
 
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="var(--accent)" />
-            <BrainRow label="Threads Today" value={brainStatus.threadsToday} color="var(--severity-low)" />
+            <BrainRow label="KB Rules Active"  value={brainStatus.kbRulesActive}  color="var(--accent)" />
+            <BrainRow label="Messages Today"   value={brainStatus.messagesCount}  color="var(--severity-low)" />
+            <BrainRow label="Contexts Built"   value={brainStatus.contextsBuilt}  color="var(--accent)" />
             <BrainRow
-              label="AI Suggestions Pending"
-              value={brainStatus.aiSuggestionsPending}
-              color={brainStatus.aiSuggestionsPending > 0 ? 'var(--severity-high)' : 'var(--text-muted)'}
-              accent={brainStatus.aiSuggestionsPending > 0}
+              label="Topics Tracked"
+              value={brainStatus.topicsTracked}
+              color="var(--severity-high)"
+              accent={brainStatus.topicsTracked > 0}
             />
 
             {/* Mini activity bar */}
@@ -761,7 +813,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                 <div
                   style={{
                     height: '100%',
-                    width: `${Math.min(100, (brainStatus.threadsToday / 20) * 100)}%`,
+                    width: `${Math.min(100, (brainStatus.messagesCount / 100) * 100)}%`,
                     background: 'linear-gradient(90deg, var(--accent), rgba(var(--accent-rgb),0.5))',
                     borderRadius: 2,
                     transition: 'width 1s ease-out',
@@ -769,7 +821,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                 />
               </div>
               <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, fontWeight: 500 }}>
-                Tori processed {brainStatus.threadsToday} threads today
+                {brainStatus.messagesCount} messages processed today
               </p>
             </div>
           </div>
