@@ -196,6 +196,45 @@ export interface ToriSettings {
   updated_at: string
 }
 
+export interface Briefing {
+  id: string
+  name: string
+  description: string | null
+  is_enabled: boolean
+  frequency: 'daily' | 'weekly' | 'monthly'
+  weekly_day: number | null
+  send_time: string
+  timezone: string
+  topics: string[]
+  departments: string[]
+  min_severity: string
+  created_at: string
+  updated_at: string
+}
+
+export interface BriefingRecipient {
+  id: string
+  briefing_id: string
+  channel: 'telegram' | 'email'
+  target: string
+  label: string | null
+  is_active: boolean
+}
+
+export interface BriefingHistory {
+  id: string
+  briefing_id: string | null
+  sent_at: string
+  status: 'success' | 'partial' | 'error'
+  recipients_attempted: number
+  recipients_succeeded: number
+  message_preview: string | null
+  error_message: string | null
+  briefings?: { name: string } | null
+}
+
+export type BriefingWithRecipients = Briefing & { briefing_recipients: BriefingRecipient[] }
+
 export interface DashboardStats {
   openSituations: number
   resolvedToday: number
