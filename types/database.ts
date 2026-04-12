@@ -4,7 +4,10 @@ export type AiStatus = 'pending' | 'processing' | 'done' | 'failed'
 export type ThreadStatus = 'open' | 'resolved' | 'escalated' | 'unresolved'
 export type AlertSeverity = 'low' | 'medium' | 'high' | 'critical'
 export type AlertStatus = 'open' | 'acknowledged' | 'resolved' | 'dismissed'
-export type ActivityType = 'call_outbound' | 'call_inbound' | 'telegram_sent' | 'email_sent' | 'kb_flagged' | 'synthesis' | 'alert'
+export type ActivityType =
+  | 'call_outbound' | 'call_inbound' | 'telegram_sent' | 'email_sent'
+  | 'kb_flagged' | 'synthesis' | 'alert'
+  | 'evening_briefing' | 'morning_briefing' | 'evening_briefing_error'
 export type ReportType = 'daily' | 'weekly' | 'monthly' | 'custom'
 export type DeliveryChannel = 'telegram' | 'email' | 'voice'
 export type DeliveryStatus = 'pending' | 'sent' | 'failed'
@@ -179,6 +182,18 @@ export interface ReportDelivery {
   sent_at: string | null
   error_message: string | null
   created_at: string
+}
+
+export interface ToriSettings {
+  id: string
+  briefing_telegram_chat_id: string | null
+  briefing_time: string
+  briefing_enabled: boolean
+  email_briefing_enabled: boolean
+  briefing_email: string | null
+  morning_enabled: boolean
+  morning_time: string
+  updated_at: string
 }
 
 export interface DashboardStats {
