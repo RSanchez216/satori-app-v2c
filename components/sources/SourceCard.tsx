@@ -43,8 +43,8 @@ export function SourceCard({
     <div
       className="rounded-xl border overflow-hidden flex flex-col"
       style={{
-        background: '#0d1117',
-        borderColor: hovered ? 'rgba(62,207,207,0.25)' : '#1a2332',
+        background: 'var(--bg-surface)',
+        borderColor: hovered ? 'rgba(62,207,207,0.25)' : 'var(--border-subtle)',
         opacity: source.is_active ? 1 : 0.6,
         transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         boxShadow: hovered ? '0 8px 24px rgba(0,0,0,0.3)' : 'none',
@@ -56,7 +56,7 @@ export function SourceCard({
       {/* Top accent bar */}
       <div
         className="h-0.5 w-full"
-        style={{ background: source.is_active ? '#3ecfcf' : '#1a2332' }}
+        style={{ background: source.is_active ? 'var(--accent)' : 'var(--border-subtle)' }}
       />
 
       <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -70,9 +70,9 @@ export function SourceCard({
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                background: 'rgba(62,207,207,0.1)',
-                border: '1px solid rgba(62,207,207,0.2)',
-                color: '#3ecfcf',
+                background: 'var(--accent-dim)',
+                border: '1px solid rgba(var(--accent-rgb),0.2)',
+                color: 'var(--accent)',
                 fontSize: 14,
                 fontWeight: 700,
               }}
@@ -81,7 +81,7 @@ export function SourceCard({
             </div>
 
             <div>
-              <p style={{ fontSize: 13.5, fontWeight: 700, color: '#e6edf3', lineHeight: 1.2 }}>
+              <p style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
                 {source.name}
               </p>
               <div className="flex items-center gap-2" style={{ marginTop: 3 }}>
@@ -91,14 +91,14 @@ export function SourceCard({
                     fontWeight: 600,
                     padding: '1px 7px',
                     borderRadius: 4,
-                    background: 'rgba(62,207,207,0.1)',
-                    color: '#3ecfcf',
+                    background: 'var(--accent-dim)',
+                    color: 'var(--accent)',
                   }}
                 >
                   Telegram
                 </span>
                 {shortId && (
-                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#3a4555' }}>
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
                     {shortId}
                   </span>
                 )}
@@ -114,14 +114,14 @@ export function SourceCard({
                 padding: '3px 10px',
                 fontSize: 11,
                 fontWeight: 600,
-                background: source.is_active ? 'rgba(86,211,100,0.1)' : 'rgba(255,255,255,0.04)',
-                color: source.is_active ? '#56d364' : '#4a5a6a',
-                border: source.is_active ? '1px solid rgba(86,211,100,0.2)' : '1px solid #1a2332',
+                background: source.is_active ? 'rgba(86,211,100,0.1)' : 'var(--bg-elevated)',
+                color: source.is_active ? 'var(--severity-low)' : 'var(--text-muted)',
+                border: source.is_active ? '1px solid rgba(86,211,100,0.2)' : '1px solid var(--border-subtle)',
               }}
             >
               <span
                 className="rounded-full"
-                style={{ width: 5, height: 5, background: source.is_active ? '#56d364' : '#4a5a6a', display: 'inline-block' }}
+                style={{ width: 5, height: 5, background: source.is_active ? 'var(--severity-low)' : 'var(--text-muted)', display: 'inline-block' }}
               />
               {source.is_active ? 'Live' : 'Inactive'}
             </div>
@@ -129,7 +129,7 @@ export function SourceCard({
             {source.muted && (
               <div
                 className="flex items-center gap-1 rounded-full"
-                style={{ padding: '3px 8px', fontSize: 11, background: 'rgba(227,179,65,0.1)', color: '#e3b341', border: '1px solid rgba(227,179,65,0.2)' }}
+                style={{ padding: '3px 8px', fontSize: 11, background: 'rgba(227,179,65,0.1)', color: 'var(--severity-high)', border: '1px solid rgba(227,179,65,0.2)' }}
               >
                 <VolumeX size={10} /> Muted
               </div>
@@ -138,10 +138,10 @@ export function SourceCard({
             <div className="relative">
               <button
                 className="flex items-center justify-center rounded-lg transition-colors"
-                style={{ width: 26, height: 26, color: '#3a4a5a' }}
+                style={{ width: 26, height: 26, color: 'var(--text-muted)' }}
                 onClick={() => setMenuOpen(!menuOpen)}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#8a9aaa' }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#3a4a5a' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
               >
                 <MoreVertical size={14} />
               </button>
@@ -151,7 +151,7 @@ export function SourceCard({
                   <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                   <div
                     className="absolute right-0 top-8 z-20 rounded-xl overflow-hidden w-44 shadow-2xl"
-                    style={{ background: '#111820', border: '1px solid #1e2530' }}
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
                   >
                     <MenuItem
                       icon={source.is_active ? Power : CheckCircle2}
@@ -163,7 +163,7 @@ export function SourceCard({
                       label={source.muted ? 'Unmute' : 'Mute alerts'}
                       onClick={() => { onToggleMute(source.id, source.muted); setMenuOpen(false) }}
                     />
-                    <div style={{ height: 1, margin: '0 12px', background: '#1e2530' }} />
+                    <div style={{ height: 1, margin: '0 12px', background: 'var(--border-subtle)' }} />
                     <MenuItem
                       icon={Trash2}
                       label="Delete source"
@@ -209,7 +209,7 @@ export function SourceCard({
           {/* Fixed-height row so all cards stay same height */}
           <div style={{ height: 20, marginTop: 6 }}>
             {!hasActivity && (
-              <p style={{ fontSize: 10, color: '#2a3545', fontStyle: 'italic' }}>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 Waiting for messages…
               </p>
             )}
@@ -235,7 +235,7 @@ function Stat({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <div className="flex items-center gap-1" style={{ color: '#3a4a5a' }}>
+      <div className="flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
         {icon}
         <span style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           {label}
@@ -245,7 +245,7 @@ function Stat({
         style={{
           fontSize: small ? 12 : 18,
           fontWeight: small ? 500 : 800,
-          color: highlight ? '#3ecfcf' : '#c8d8e8',
+          color: highlight ? 'var(--accent)' : 'var(--text-primary)',
           letterSpacing: small ? 0 : '-0.02em',
           lineHeight: 1,
         }}
@@ -271,9 +271,9 @@ function MenuItem({
     <button
       onClick={onClick}
       className="flex items-center gap-2.5 w-full text-left transition-colors"
-      style={{ padding: '10px 16px', fontSize: 12, fontWeight: 500, color: danger ? '#f85149' : '#8a9aaa' }}
+      style={{ padding: '10px 16px', fontSize: 12, fontWeight: 500, color: danger ? 'var(--severity-critical)' : 'var(--text-secondary)' }}
       onMouseEnter={(e) => {
-        (e.currentTarget as HTMLButtonElement).style.background = danger ? 'rgba(248,81,73,0.08)' : 'rgba(255,255,255,0.04)'
+        (e.currentTarget as HTMLButtonElement).style.background = danger ? 'rgba(248,81,73,0.08)' : 'var(--bg-hover)'
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLButtonElement).style.background = 'transparent'

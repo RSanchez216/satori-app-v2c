@@ -79,16 +79,16 @@ export function AlertsClient({ initialAlerts }: Props) {
           {counts.critical > 0 && (
             <span
               className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
-              style={{ background: 'rgba(255,68,68,0.12)', color: '#ff4444', border: '1px solid rgba(255,68,68,0.2)' }}
+              style={{ background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', border: '1px solid rgba(248,81,73,0.2)' }}
             >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ff4444' }} />
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--severity-critical)' }} />
               {counts.critical} Critical
             </span>
           )}
           {counts.kbViolations > 0 && (
             <span
               className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
-              style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7', border: '1px solid rgba(168,85,247,0.2)' }}
+              style={{ background: 'var(--kb-purple-dim)', color: 'var(--kb-purple)', border: '1px solid rgba(179,146,240,0.2)' }}
             >
               <ShieldAlert size={11} />
               {counts.kbViolations} KB Violation{counts.kbViolations !== 1 ? 's' : ''}
@@ -117,9 +117,9 @@ export function AlertsClient({ initialAlerts }: Props) {
               onClick={() => setFilterStatus(tab.id)}
               className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
               style={{
-                background: filterStatus === tab.id ? 'rgba(62,207,207,0.12)' : 'transparent',
+                background: filterStatus === tab.id ? 'var(--accent-dim)' : 'transparent',
                 color: filterStatus === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
-                border: filterStatus === tab.id ? '1px solid rgba(62,207,207,0.2)' : '1px solid transparent',
+                border: filterStatus === tab.id ? '1px solid rgba(var(--accent-rgb),0.2)' : '1px solid transparent',
               }}
             >
               {tab.label}
@@ -207,12 +207,12 @@ function AlertCard({
       style={{
         background: 'var(--bg-card)',
         borderColor: isKb
-          ? 'rgba(168,85,247,0.3)'
+          ? 'rgba(179,146,240,0.3)'
           : isDismissed || isResolved
           ? 'var(--border)'
           : severityBorderColor(alert.severity),
         opacity: isDismissed ? 0.5 : 1,
-        borderLeft: `3px solid ${isKb ? '#a855f7' : severityColor(alert.severity)}`,
+        borderLeft: `3px solid ${isKb ? 'var(--kb-purple)' : severityColor(alert.severity)}`,
       }}
     >
       <div className="px-5 py-4 flex items-start gap-4">
@@ -220,8 +220,8 @@ function AlertCard({
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
           style={{
-            background: isKb ? 'rgba(168,85,247,0.12)' : `${severityColor(alert.severity)}18`,
-            color: isKb ? '#a855f7' : severityColor(alert.severity),
+            background: isKb ? 'var(--kb-purple-dim)' : 'var(--bg-elevated)',
+            color: isKb ? 'var(--kb-purple)' : severityColor(alert.severity),
           }}
         >
           {isKb ? <ShieldAlert size={15} /> : <Bell size={15} />}
@@ -234,7 +234,7 @@ function AlertCard({
             {isKb && (
               <span
                 className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium"
-                style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}
+                style={{ background: 'var(--kb-purple-dim)', color: 'var(--kb-purple)' }}
               >
                 <ShieldAlert size={10} /> KB Violation
               </span>
@@ -250,7 +250,7 @@ function AlertCard({
             {isResolved && (
               <span
                 className="text-xs px-1.5 py-0.5 rounded"
-                style={{ background: 'rgba(107,203,119,0.1)', color: '#6bcb77' }}
+                style={{ background: 'rgba(86,211,100,0.1)', color: 'var(--severity-low)' }}
               >
                 Resolved
               </span>
@@ -269,7 +269,7 @@ function AlertCard({
 
           {/* KB entry link */}
           {alert.knowledge_base_entry && (
-            <p className="text-xs mt-1.5" style={{ color: '#a855f7' }}>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--kb-purple)' }}>
               KB Rule: {alert.knowledge_base_entry.title}
             </p>
           )}
@@ -339,9 +339,9 @@ function AlertCard({
                 onClick={() => onAction(alert.id, 'acknowledged')}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
                 style={{
-                  background: 'rgba(255,209,102,0.08)',
-                  color: '#ffd166',
-                  border: '1px solid rgba(255,209,102,0.2)',
+                  background: 'rgba(227,179,65,0.08)',
+                  color: 'var(--severity-high)',
+                  border: '1px solid rgba(227,179,65,0.2)',
                 }}
                 title="Acknowledge"
               >
@@ -355,9 +355,9 @@ function AlertCard({
               onClick={() => onAction(alert.id, 'resolved')}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
               style={{
-                background: 'rgba(107,203,119,0.08)',
-                color: '#6bcb77',
-                border: '1px solid rgba(107,203,119,0.2)',
+                background: 'rgba(86,211,100,0.08)',
+                color: 'var(--severity-low)',
+                border: '1px solid rgba(86,211,100,0.2)',
               }}
               title="Mark resolved"
             >
@@ -383,20 +383,20 @@ function AlertCard({
 
 function severityColor(severity: AlertSeverity): string {
   const map: Record<AlertSeverity, string> = {
-    critical: '#ff4444',
-    high: '#ff8c42',
-    medium: '#ffd166',
-    low: '#6bcb77',
+    critical: 'var(--severity-critical)',
+    high:     'var(--severity-high)',
+    medium:   'var(--severity-medium)',
+    low:      'var(--severity-low)',
   }
   return map[severity] ?? 'var(--accent)'
 }
 
 function severityBorderColor(severity: AlertSeverity): string {
   const map: Record<AlertSeverity, string> = {
-    critical: 'rgba(255,68,68,0.3)',
-    high: 'rgba(255,140,66,0.3)',
-    medium: 'rgba(255,209,102,0.3)',
-    low: 'rgba(107,203,119,0.3)',
+    critical: 'rgba(248,81,73,0.3)',
+    high:     'rgba(227,179,65,0.3)',
+    medium:   'rgba(62,207,207,0.3)',
+    low:      'rgba(86,211,100,0.3)',
   }
   return map[severity] ?? 'var(--border)'
 }

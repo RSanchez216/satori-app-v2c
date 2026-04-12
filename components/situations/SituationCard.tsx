@@ -32,13 +32,13 @@ export interface SituationData {
 }
 
 const BORDER_COLOR: Record<string, string> = {
-  critical:   '#f85149',
-  high:       '#e3b341',
-  kb:         '#b392f0',
-  medium:     '#3ecfcf',
-  low:        '#56d364',
-  resolved:   '#243040',
-  default:    '#243040',
+  critical:   'var(--severity-critical)',
+  high:       'var(--severity-high)',
+  kb:         'var(--kb-purple)',
+  medium:     'var(--severity-medium)',
+  low:        'var(--severity-low)',
+  resolved:   'var(--border-default)',
+  default:    'var(--border-default)',
 }
 
 const BG_TINT: Record<string, string> = {
@@ -91,7 +91,7 @@ export function SituationCard({ situation: s, onEscalate }: Props) {
         el.style.transform = 'translateY(-1px)'
         el.style.boxShadow = '0 6px 24px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.25)'
         el.style.borderColor = isResolved
-          ? '#2d3d50'
+          ? 'var(--border-default)'
           : s.kb_flagged
           ? 'rgba(179,146,240,0.5)'
           : 'var(--border-default)'
@@ -123,7 +123,7 @@ export function SituationCard({ situation: s, onEscalate }: Props) {
               {isResolved && (
                 <span
                   className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md"
-                  style={{ color: '#56d364', background: 'rgba(86,211,100,0.1)' }}
+                  style={{ color: 'var(--severity-low)', background: 'rgba(86,211,100,0.1)' }}
                 >
                   <CheckCircle2 size={10} /> Resolved
                 </span>
@@ -185,7 +185,7 @@ export function SituationCard({ situation: s, onEscalate }: Props) {
               {isResolved && s.resolved_at && s.started_at && (
                 <span
                   className="inline-flex items-center gap-1 text-[11px] font-medium"
-                  style={{ color: '#56d364' }}
+                  style={{ color: 'var(--severity-low)' }}
                 >
                   Resolved in {durationText(s.started_at, s.resolved_at)}
                 </span>

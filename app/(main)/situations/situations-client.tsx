@@ -105,10 +105,10 @@ export function SituationsClient({ situations, isMock }: Props) {
         />
         <Divider />
         <SummaryStat
-          icon={<CheckCircle2 size={13} style={{ color: '#56d364' }} />}
+          icon={<CheckCircle2 size={13} style={{ color: 'var(--severity-low)' }} />}
           label="Resolved Today"
           value={resolvedToday}
-          color="#56d364"
+          color="var(--severity-low)"
         />
         <Divider />
         <SummaryStat
@@ -123,7 +123,7 @@ export function SituationsClient({ situations, isMock }: Props) {
             className="ml-auto text-[11px] font-medium px-2.5 py-1 rounded-full"
             style={{
               background: 'rgba(227,179,65,0.1)',
-              color: '#e3b341',
+              color: 'var(--severity-high)',
               border: '1px solid rgba(227,179,65,0.2)',
             }}
           >

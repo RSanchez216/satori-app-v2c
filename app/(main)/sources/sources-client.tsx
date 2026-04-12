@@ -126,13 +126,13 @@ export function SourcesClient({ initialSources, messageCountMap, contextCountMap
             style={{
               fontSize: 18,
               fontWeight: 800,
-              color: '#e8edf2',
+              color: 'var(--text-primary)',
               letterSpacing: '-0.02em',
             }}
           >
             Sources
           </h1>
-          <p style={{ fontSize: 12, color: '#3a4a5a', marginTop: 3 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
             Connect Telegram groups, email inboxes, and voice channels for Tori to monitor
           </p>
         </div>
@@ -158,22 +158,22 @@ export function SourcesClient({ initialSources, messageCountMap, contextCountMap
       {activeSources.length > 0 && (
         <div
           className="flex items-center gap-6 px-5 py-3 rounded-xl flex-wrap"
-          style={{ background: '#0d1117', border: '1px solid #1a2332' }}
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
         >
-          <SummaryStat label="Active Sources" value={activeSources.length} color="#3ecfcf" />
+          <SummaryStat label="Active Sources" value={activeSources.length} color="var(--accent)" />
           <Divider />
-          <SummaryStat label="Telegram" value={telegramCount} color="#3ecfcf" />
+          <SummaryStat label="Telegram" value={telegramCount} color="var(--accent)" />
           <Divider />
-          <SummaryStat label="Messages Ingested" value={totalMessages} color="#8a9aaa" />
+          <SummaryStat label="Messages Ingested" value={totalMessages} color="var(--text-secondary)" />
         </div>
       )}
 
       {/* ── Source types banner ── */}
       <div
         className="flex items-center gap-4 px-4 py-3 rounded-xl"
-        style={{ background: '#0d1117', border: '1px solid #1a2332', fontSize: 12 }}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', fontSize: 12 }}
       >
-        <div className="flex items-center gap-2" style={{ color: '#3ecfcf' }}>
+        <div className="flex items-center gap-2" style={{ color: 'var(--accent)' }}>
           <Send size={13} />
           <span className="font-semibold">Telegram</span>
           <span
@@ -182,26 +182,26 @@ export function SourcesClient({ initialSources, messageCountMap, contextCountMap
               padding: '1px 7px',
               borderRadius: 20,
               background: 'rgba(86,211,100,0.15)',
-              color: '#56d364',
+              color: 'var(--severity-low)',
               fontWeight: 700,
             }}
           >
             Available
           </span>
         </div>
-        <div style={{ width: 1, height: 16, background: '#1a2332' }} />
-        <div className="flex items-center gap-2" style={{ color: '#3a4a5a' }}>
+        <div style={{ width: 1, height: 16, background: 'var(--border-subtle)' }} />
+        <div className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
           <BookOpen size={13} />
           <span>Email Inbox</span>
-          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 20, background: '#111820', color: '#3a4a5a', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 20, background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontWeight: 700 }}>
             Coming Soon
           </span>
         </div>
-        <div style={{ width: 1, height: 16, background: '#1a2332' }} />
-        <div className="flex items-center gap-2" style={{ color: '#3a4a5a' }}>
+        <div style={{ width: 1, height: 16, background: 'var(--border-subtle)' }} />
+        <div className="flex items-center gap-2" style={{ color: 'var(--text-muted)' }}>
           <Zap size={13} />
           <span>Voice / Phone</span>
-          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 20, background: '#111820', color: '#3a4a5a', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 20, background: 'var(--bg-elevated)', color: 'var(--text-muted)', fontWeight: 700 }}>
             Coming Soon
           </span>
         </div>
@@ -269,11 +269,11 @@ function DetectedGroupsBanner({
     >
       {/* Header row */}
       <div className="flex items-center gap-2">
-        <Search size={14} style={{ color: '#e3b341' }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#e3b341' }}>
+        <Search size={14} style={{ color: 'var(--severity-high)' }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--severity-high)' }}>
           {sources.length} New Group{sources.length !== 1 ? 's' : ''} Detected
         </span>
-        <span style={{ fontSize: 11, color: '#6a7e92', marginLeft: 4 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 4 }}>
           SATORI found new Telegram groups with your bot
         </span>
       </div>
@@ -345,7 +345,7 @@ function DetectedSourceRow({
           flexShrink: 0,
         }}
       >
-        <Send size={13} style={{ color: '#3ecfcf' }} />
+        <Send size={13} style={{ color: 'var(--accent)' }} />
       </div>
 
       {/* Name + meta */}
@@ -360,7 +360,7 @@ function DetectedSourceRow({
             style={{
               fontSize: 13,
               fontWeight: 600,
-              color: '#e6edf3',
+              color: 'var(--text-primary)',
               background: 'rgba(62,207,207,0.06)',
               border: '1px solid rgba(62,207,207,0.3)',
               borderRadius: 6,
@@ -372,39 +372,39 @@ function DetectedSourceRow({
           />
         ) : (
           <div className="flex items-center gap-1.5">
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#c8d8e8' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
               {name}
             </span>
             <button
               onClick={() => setEditing(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#3a4a5a' }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)' }}
             >
               <Pencil size={11} />
             </button>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 10, color: '#3a4a5a', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
             {src.external_id}
           </span>
-          <span style={{ fontSize: 10, color: '#2a3545' }}>·</span>
-          <span style={{ fontSize: 10, color: '#3a4555' }}>Detected {timeAgo}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>·</span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Detected {timeAgo}</span>
         </div>
       </div>
 
       {/* Action buttons */}
       {confirming ? (
         <div className="flex items-center gap-2">
-          <span style={{ fontSize: 11, color: '#8d96a0' }}>Sure?</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Sure?</span>
           <button
             onClick={async () => { setLoading(true); await onDismiss(src.id); setLoading(false) }}
             disabled={loading}
             style={{
               fontSize: 11,
               fontWeight: 700,
-              color: '#ff6b6b',
-              background: 'rgba(255,75,75,0.1)',
-              border: '1px solid rgba(255,75,75,0.25)',
+              color: 'var(--bell-error)',
+              background: 'var(--bell-error-bg)',
+              border: '1px solid var(--bell-error-border)',
               borderRadius: 6,
               padding: '4px 10px',
               cursor: 'pointer',
@@ -416,9 +416,9 @@ function DetectedSourceRow({
             onClick={() => setConfirm(false)}
             style={{
               fontSize: 11,
-              color: '#4a5a6a',
+              color: 'var(--text-muted)',
               background: 'transparent',
-              border: '1px solid #1e2530',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 6,
               padding: '4px 10px',
               cursor: 'pointer',
@@ -435,8 +435,8 @@ function DetectedSourceRow({
             style={{
               fontSize: 12,
               fontWeight: 700,
-              color: '#080d14',
-              background: '#3ecfcf',
+              color: '#ffffff',
+              background: 'var(--accent)',
               border: 'none',
               borderRadius: 7,
               padding: '5px 14px',
@@ -445,7 +445,7 @@ function DetectedSourceRow({
               alignItems: 'center',
               gap: 5,
               opacity: loading ? 0.7 : 1,
-              boxShadow: '0 0 10px rgba(62,207,207,0.25)',
+              boxShadow: '0 0 10px var(--accent-glow)',
             }}
           >
             {loading ? '…' : <><Check size={11} /> Start Monitoring</>}
@@ -455,20 +455,20 @@ function DetectedSourceRow({
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: '#4a5a6a',
+              color: 'var(--text-muted)',
               background: 'transparent',
-              border: '1px solid #1e2530',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 7,
               padding: '5px 12px',
               cursor: 'pointer',
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = '#ff6b6b'
-              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,75,75,0.3)'
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--bell-error)'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--bell-error-border)'
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = '#4a5a6a'
-              ;(e.currentTarget as HTMLButtonElement).style.borderColor = '#1e2530'
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'
+              ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)'
             }}
           >
             <X size={12} style={{ display: 'inline', marginRight: 3 }} />
@@ -482,13 +482,13 @@ function DetectedSourceRow({
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 function Divider() {
-  return <div style={{ width: 1, height: 16, background: '#1a2332', alignSelf: 'center' }} />
+  return <div style={{ width: 1, height: 16, background: 'var(--border-subtle)', alignSelf: 'center' }} />
 }
 
 function SummaryStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span style={{ fontSize: 12, color: '#3a4a5a' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ fontSize: 14, fontWeight: 800, color }}>{value}</span>
     </div>
   )
@@ -504,27 +504,27 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         justifyContent: 'center',
         gap: 20,
         padding: '64px 20px',
-        background: '#0d1117',
-        border: '1px solid #1a2332',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-subtle)',
         borderRadius: 16,
       }}
     >
       <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-        <circle cx="36" cy="36" r="34" stroke="#1a2332" strokeWidth="1.5" />
-        <circle cx="36" cy="36" r="22" stroke="#1a2332" strokeWidth="1" strokeDasharray="3 3" />
-        <circle cx="36" cy="36" r="10" stroke="#3ecfcf" strokeWidth="1.5" opacity="0.4" />
-        <circle cx="36" cy="36" r="16" stroke="#3ecfcf" strokeWidth="0.75" opacity="0.2" />
+        <circle cx="36" cy="36" r="34" stroke="var(--border-subtle)" strokeWidth="1.5" />
+        <circle cx="36" cy="36" r="22" stroke="var(--border-subtle)" strokeWidth="1" strokeDasharray="3 3" />
+        <circle cx="36" cy="36" r="10" stroke="var(--accent)" strokeWidth="1.5" opacity="0.4" />
+        <circle cx="36" cy="36" r="16" stroke="var(--accent)" strokeWidth="0.75" opacity="0.2" />
         <circle cx="36" cy="36" r="4" fill="#3ecfcf" opacity="0.5" />
-        <line x1="36" y1="2" x2="36" y2="14" stroke="#3ecfcf" strokeWidth="1.5" opacity="0.4" strokeLinecap="round" />
-        <line x1="28" y1="5" x2="32" y2="14" stroke="#3ecfcf" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
-        <line x1="44" y1="5" x2="40" y2="14" stroke="#3ecfcf" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
+        <line x1="36" y1="2" x2="36" y2="14" stroke="var(--accent)" strokeWidth="1.5" opacity="0.4" strokeLinecap="round" />
+        <line x1="28" y1="5" x2="32" y2="14" stroke="var(--accent)" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
+        <line x1="44" y1="5" x2="40" y2="14" stroke="var(--accent)" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
       </svg>
 
       <div style={{ textAlign: 'center', maxWidth: 340 }}>
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: '#c8d8e8', marginBottom: 8, letterSpacing: '-0.01em' }}>
+        <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.01em' }}>
           No sources connected
         </h3>
-        <p style={{ fontSize: 13, lineHeight: 1.6, color: '#4a5a6a' }}>
+        <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
           Connect your first Telegram group and Tori will start monitoring messages,
           building context windows, and detecting situations automatically.
         </p>
@@ -535,7 +535,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
           <Radio size={14} />
           Connect Telegram Source
         </button>
-        <p style={{ fontSize: 11, color: '#2a3545' }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           Or just add your bot to any group — SATORI will detect it automatically
         </p>
       </div>

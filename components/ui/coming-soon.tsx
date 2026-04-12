@@ -11,7 +11,7 @@ export function ComingSoon({ icon: Icon, title, description }: Props) {
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-5">
       <div
         className="w-16 h-16 rounded-2xl flex items-center justify-center"
-        style={{ background: 'rgba(62,207,207,0.08)', border: '1px solid rgba(62,207,207,0.15)' }}
+        style={{ background: 'var(--accent-dim)', border: '1px solid rgba(var(--accent-rgb), 0.15)' }}
       >
         <Icon size={28} style={{ color: 'var(--accent)' }} />
       </div>
@@ -22,9 +22,9 @@ export function ComingSoon({ icon: Icon, title, description }: Props) {
       <div
         className="text-xs px-3 py-1.5 rounded-full"
         style={{
-          background: 'rgba(62,207,207,0.08)',
+          background: 'var(--accent-dim)',
           color: 'var(--accent)',
-          border: '1px solid rgba(62,207,207,0.2)',
+          border: '1px solid rgba(var(--accent-rgb), 0.2)',
         }}
       >
         Coming soon

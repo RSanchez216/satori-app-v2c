@@ -225,7 +225,7 @@ export function AddSourceModal({ onClose, onAdded }: Props) {
                 className="p-3 rounded-lg"
                 style={{ background: 'rgba(86,211,100,0.08)', border: '1px solid rgba(86,211,100,0.15)' }}
               >
-                <p className="text-[12px] font-semibold" style={{ color: '#56d364' }}>
+                <p className="text-[12px] font-semibold" style={{ color: 'var(--severity-low)' }}>
                   ✓ Source &ldquo;{savedSource?.name}&rdquo; saved successfully
                 </p>
                 <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
@@ -277,7 +277,7 @@ export function AddSourceModal({ onClose, onAdded }: Props) {
                   color: 'var(--text-secondary)',
                 }}
               >
-                <p className="font-semibold mb-1" style={{ color: '#e3b341' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--severity-high)' }}>
                   Manual alternative
                 </p>
                 <p className="mb-1">Run this in your browser or terminal:</p>
@@ -314,7 +314,7 @@ export function AddSourceModal({ onClose, onAdded }: Props) {
                 className="w-14 h-14 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(86,211,100,0.12)', border: '1px solid rgba(86,211,100,0.25)' }}
               >
-                <CheckCircle2 size={28} style={{ color: '#56d364' }} />
+                <CheckCircle2 size={28} style={{ color: 'var(--severity-low)' }} />
               </div>
               <div>
                 <p className="text-[16px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -370,7 +370,7 @@ function ErrorMsg({ msg }: { msg: string }) {
   return (
     <div
       className="flex items-start gap-2 p-3 rounded-lg text-[12px]"
-      style={{ background: 'rgba(248,81,73,0.08)', border: '1px solid rgba(248,81,73,0.2)', color: '#f85149' }}
+      style={{ background: 'var(--bell-error-bg)', border: '1px solid var(--bell-error-border)', color: 'var(--bell-error)' }}
     >
       <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
       {msg}

@@ -5,7 +5,7 @@
   font-weight: 700 !important;
   font-size: 26px !important;
   letter-spacing: 0.28em !important;
-  color: #3ecfcf !important;
+  color: var(--accent) !important;
   line-height: 1 !important;
   text-transform: uppercase !important;
 }
@@ -15,15 +15,80 @@
 @tailwind utilities;
 
 /* ============================================================
-   SATORI DESIGN SYSTEM
+   SATORI DESIGN SYSTEM — LIGHT THEME (default / :root)
    ============================================================ */
 :root {
+  /* Surfaces */
+  --bg-base:     #f0f4f8;
+  --bg-surface:  #ffffff;
+  --bg-elevated: #f8fafc;
+  --bg-card:     #ffffff;
+  --bg-hover:    #f1f5f9;
+  --bg-sidebar:  #f8fafc;
+
+  /* Borders */
+  --border-subtle:  #e2e8f0;
+  --border-default: #cbd5e1;
+
+  /* Accent */
+  --accent:       #0891b2;
+  --accent-rgb:   8, 145, 178;
+  --accent-dim:   rgba(8, 145, 178, 0.10);
+  --accent-glow:  rgba(8, 145, 178, 0.25);
+  --accent-glow2: rgba(8, 145, 178, 0.08);
+
+  /* Text */
+  --text-primary:   #0f172a;
+  --text-secondary: #64748b;
+  --text-muted:     #94a3b8;
+
+  /* Severity */
+  --severity-critical: #dc2626;
+  --severity-high:     #d97706;
+  --severity-medium:   #0891b2;
+  --severity-low:      #16a34a;
+
+  /* KB */
+  --kb-purple: #7c3aed;
+  --kb-purple-dim: rgba(124, 58, 237, 0.10);
+
+  /* Aliases */
+  --border: var(--border-subtle);
+  --bg-primary: var(--bg-base);
+
+  /* Nav active */
+  --nav-active-bg:     #f0fdfe;
+  --nav-active-color:  #0891b2;
+  --nav-active-border: #0891b2;
+  --nav-section-color: #94a3b8;
+  --nav-item-color:    #64748b;
+  --nav-item-hover-bg: rgba(0, 0, 0, 0.04);
+  --nav-item-hover-color: #334155;
+
+  /* Topbar */
+  --topbar-bg:       #ffffff;
+  --topbar-border:   #e2e8f0;
+  --topbar-label:    #94a3b8;
+  --topbar-icon:     #94a3b8;
+  --topbar-icon-border: #e2e8f0;
+
+  /* Notification bell error color */
+  --bell-error: #dc2626;
+  --bell-error-bg: rgba(220, 38, 38, 0.08);
+  --bell-error-border: rgba(220, 38, 38, 0.2);
+}
+
+/* ============================================================
+   DARK THEME
+   ============================================================ */
+html.dark {
   /* Surfaces */
   --bg-base:     #080d14;
   --bg-surface:  #0d1117;
   --bg-elevated: #111827;
   --bg-card:     #111820;
   --bg-hover:    #161e28;
+  --bg-sidebar:  #0a0f18;
 
   /* Borders */
   --border-subtle:  #1e2530;
@@ -31,6 +96,7 @@
 
   /* Accent */
   --accent:       #3ecfcf;
+  --accent-rgb:   62, 207, 207;
   --accent-dim:   rgba(62, 207, 207, 0.12);
   --accent-glow:  rgba(62, 207, 207, 0.25);
   --accent-glow2: rgba(62, 207, 207, 0.08);
@@ -49,6 +115,31 @@
   /* KB */
   --kb-purple: #b392f0;
   --kb-purple-dim: rgba(179, 146, 240, 0.12);
+
+  /* Aliases */
+  --border: var(--border-subtle);
+  --bg-primary: var(--bg-base);
+
+  /* Nav active */
+  --nav-active-bg:     linear-gradient(90deg, rgba(62,207,207,0.12) 0%, rgba(62,207,207,0.04) 100%);
+  --nav-active-color:  #e6edf3;
+  --nav-active-border: #3ecfcf;
+  --nav-section-color: #2a3545;
+  --nav-item-color:    #4a5a6a;
+  --nav-item-hover-bg: rgba(255, 255, 255, 0.035);
+  --nav-item-hover-color: #a0b0c0;
+
+  /* Topbar */
+  --topbar-bg:       #080d14;
+  --topbar-border:   #1a2332;
+  --topbar-label:    #2a3545;
+  --topbar-icon:     #4a5a6a;
+  --topbar-icon-border: #1a2332;
+
+  /* Notification bell error color */
+  --bell-error: #ff6b6b;
+  --bell-error-bg: rgba(255, 75, 75, 0.12);
+  --bell-error-border: rgba(255, 75, 75, 0.2);
 }
 
 /* ============================================================
@@ -64,6 +155,11 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.6;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+*, *::before, *::after {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease;
 }
 
 /* ============================================================
@@ -167,7 +263,7 @@ body {
   font-size: 0.8125rem;
   font-weight: 600;
   background: var(--accent);
-  color: #080d14;
+  color: #ffffff;
   border: none;
   cursor: pointer;
   transition: opacity 150ms ease, box-shadow 150ms ease;

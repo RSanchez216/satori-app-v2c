@@ -9,6 +9,7 @@ import {
   Inbox, Bell, FileText, Radio, Tag,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useTheme } from '@/components/theme-provider'
 
 const NAV = [
   {
@@ -40,6 +41,7 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname()
   const [activeCount, setActiveCount] = useState(0)
+  const { theme } = useTheme()
 
   useEffect(() => {
     const supabase = createClient()
@@ -62,13 +64,15 @@ export function Sidebar() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
+  const logoSrc = theme === 'light' ? '/logo2.png' : '/logo.png'
+
   return (
     <aside
       className="flex flex-col flex-shrink-0"
       style={{
         width: 232,
-        background: '#0a0f18',
-        borderRight: '1px solid #1a2332',
+        background: 'var(--bg-sidebar)',
+        borderRight: '1px solid var(--border-subtle)',
         height: '100vh',
         position: 'sticky',
         top: 0,
@@ -76,11 +80,11 @@ export function Sidebar() {
     >
       {/* ── Logo zone ── */}
       <div
-        className="flex items-center flex-shrink-0 border-b border-[#1a2332]"
-        style={{ padding: '16px 16px', gap: 12 }}
+        className="flex items-center flex-shrink-0"
+        style={{ padding: '16px 16px', gap: 12, borderBottom: '1px solid var(--border-subtle)' }}
       >
         <Image
-          src="/logo2.png"
+          src={logoSrc}
           alt="SATORI"
           width={44}
           height={44}
@@ -94,7 +98,7 @@ export function Sidebar() {
             fontWeight: 700,
             fontSize: '26px',
             letterSpacing: '0.28em',
-            color: '#3ecfcf',
+            color: 'var(--accent)',
             lineHeight: 1,
           }}
         >
@@ -114,7 +118,7 @@ export function Sidebar() {
                 fontWeight: 700,
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                color: '#2a3545',
+                color: 'var(--nav-section-color)',
               }}
             >
               {section.label}
@@ -138,25 +142,23 @@ export function Sidebar() {
                     fontSize: 12.5,
                     fontWeight: active ? 600 : 500,
                     letterSpacing: '0.01em',
-                    color: active ? '#e6edf3' : '#4a5a6a',
-                    background: active
-                      ? 'linear-gradient(90deg, rgba(62,207,207,0.12) 0%, rgba(62,207,207,0.04) 100%)'
-                      : 'transparent',
-                    borderLeft: active ? '2px solid #3ecfcf' : '2px solid transparent',
+                    color: active ? 'var(--nav-active-color)' : 'var(--nav-item-color)',
+                    background: active ? 'var(--nav-active-bg)' : 'transparent',
+                    borderLeft: active ? '2px solid var(--nav-active-border)' : '2px solid transparent',
                     textDecoration: 'none',
                   }}
                   onMouseEnter={(e) => {
                     if (!active) {
                       const el = e.currentTarget as HTMLAnchorElement
-                      el.style.background = 'rgba(255,255,255,0.035)'
-                      el.style.color = '#a0b0c0'
+                      el.style.background = 'var(--nav-item-hover-bg)'
+                      el.style.color = 'var(--nav-item-hover-color)'
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!active) {
                       const el = e.currentTarget as HTMLAnchorElement
                       el.style.background = 'transparent'
-                      el.style.color = '#4a5a6a'
+                      el.style.color = 'var(--nav-item-color)'
                     }
                   }}
                 >
@@ -175,15 +177,15 @@ export function Sidebar() {
       {/* ── Bottom status ── */}
       <div
         className="flex-shrink-0"
-        style={{ borderTop: '1px solid #1a2332', padding: '10px 10px 12px' }}
+        style={{ borderTop: '1px solid var(--border-subtle)', padding: '10px 10px 12px' }}
       >
         {/* Live indicator */}
         <div className="flex items-center gap-2 px-2 mb-2">
           <span
             className="w-1.5 h-1.5 rounded-full flex-shrink-0 tori-pulse"
-            style={{ background: '#56d364' }}
+            style={{ background: 'var(--severity-low)' }}
           />
-          <span style={{ fontSize: 10, color: '#3a4555', fontWeight: 500 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500 }}>
             {activeCount} source{activeCount !== 1 ? 's' : ''} · Live
           </span>
         </div>
@@ -192,15 +194,15 @@ export function Sidebar() {
         <div
           className="flex items-center gap-2.5 rounded-lg cursor-pointer transition-all"
           style={{ padding: '8px 10px' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)' }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
         >
           <div className="relative flex-shrink-0">
             <div
               className="w-7 h-7 rounded-full flex items-center justify-center text-sm leading-none"
               style={{
-                background: 'linear-gradient(135deg, #1a2d3e, #0f1e2d)',
-                border: '1px solid rgba(62,207,207,0.3)',
+                background: 'var(--accent-dim)',
+                border: '1px solid rgba(var(--accent-rgb), 0.3)',
               }}
             >
               🤖
@@ -212,22 +214,22 @@ export function Sidebar() {
                 right: -1,
                 width: 9,
                 height: 9,
-                background: '#56d364',
-                border: '2px solid #0a0f18',
+                background: 'var(--severity-low)',
+                border: '2px solid var(--bg-sidebar)',
               }}
             />
           </div>
           <div className="flex-1 min-w-0">
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#3ecfcf', lineHeight: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', lineHeight: 1 }}>
               Tori
             </div>
-            <div style={{ fontSize: 10, color: '#3a4555', lineHeight: 1, marginTop: 3 }}>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1, marginTop: 3 }}>
               AI Operations Agent
             </div>
           </div>
           <div
             className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse"
-            style={{ background: '#56d364' }}
+            style={{ background: 'var(--severity-low)' }}
           />
         </div>
       </div>

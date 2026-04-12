@@ -40,7 +40,7 @@ export function KBViolationBanner({ ruleName, expectedOutcome, overdueText, onEs
             {overdueText && (
               <span
                 className="ml-1.5 font-semibold"
-                style={{ color: '#f85149' }}
+                style={{ color: 'var(--severity-critical)' }}
               >
                 {overdueText}
               </span>

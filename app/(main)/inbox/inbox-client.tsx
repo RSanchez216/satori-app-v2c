@@ -14,21 +14,21 @@ type CtxWithSource = MessageContext & { source?: Source }
 const DEPT_FILTERS = ['All Depts', 'Dispatch', 'Safety', 'Maintenance', 'Driver', 'Finance']
 
 const SEVERITY_STYLES: Record<string, { bg: string; color: string }> = {
-  critical: { bg: 'rgba(248,81,73,0.15)',    color: '#f85149' },
-  high:     { bg: 'rgba(227,179,65,0.15)',   color: '#e3b341' },
-  medium:   { bg: 'rgba(62,207,207,0.12)',   color: '#3ecfcf' },
-  low:      { bg: 'rgba(86,211,100,0.1)',    color: '#56d364' },
+  critical: { bg: 'rgba(248,81,73,0.15)',    color: 'var(--severity-critical)' },
+  high:     { bg: 'rgba(227,179,65,0.15)',   color: 'var(--severity-high)' },
+  medium:   { bg: 'rgba(62,207,207,0.12)',   color: 'var(--severity-medium)' },
+  low:      { bg: 'rgba(86,211,100,0.1)',    color: 'var(--severity-low)' },
 }
 
 const DEPT_DOT: Record<string, string> = {
-  Dispatch:   '#3ecfcf',
-  Safety:     '#f85149',
-  Accounting: '#e3b341',
-  Fleet:      '#b392f0',
-  HR:         '#56d364',
-  Compliance: '#e3b341',
-  Maintenance:'#ff8c42',
-  Other:      '#4a5a6a',
+  Dispatch:   'var(--accent)',
+  Safety:     'var(--severity-critical)',
+  Accounting: 'var(--severity-high)',
+  Fleet:      'var(--kb-purple)',
+  HR:         'var(--severity-low)',
+  Compliance: 'var(--severity-high)',
+  Maintenance:'var(--severity-high)',
+  Other:      'var(--text-muted)',
 }
 
 interface Props {
@@ -72,11 +72,11 @@ export function InboxClient({ contexts: initial }: Props) {
       {/* Header */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 900, color: '#e6edf3', letterSpacing: '-0.02em', lineHeight: 1 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>
             Context Inbox
           </h1>
         </div>
-        <p style={{ fontSize: 11, color: '#3a4555', fontWeight: 500 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
           AI-analyzed message conversations grouped by context
         </p>
       </div>
@@ -89,8 +89,8 @@ export function InboxClient({ contexts: initial }: Props) {
           alignItems: 'center',
           gap: 12,
           padding: '10px 14px',
-          background: '#0d1117',
-          border: '1px solid #1a2332',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
           borderRadius: 10,
         }}
       >
@@ -105,9 +105,9 @@ export function InboxClient({ contexts: initial }: Props) {
                 fontSize: 12,
                 fontWeight: 500,
                 cursor: 'pointer',
-                background: activeTab === tab.id ? 'rgba(62,207,207,0.12)' : 'transparent',
-                color: activeTab === tab.id ? '#3ecfcf' : '#4a5a6a',
-                border: activeTab === tab.id ? '1px solid rgba(62,207,207,0.2)' : '1px solid transparent',
+                background: activeTab === tab.id ? 'var(--accent-dim)' : 'transparent',
+                color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-muted)',
+                border: activeTab === tab.id ? '1px solid rgba(var(--accent-rgb), 0.2)' : '1px solid transparent',
               }}
             >
               {tab.label}
@@ -115,7 +115,7 @@ export function InboxClient({ contexts: initial }: Props) {
           ))}
         </div>
 
-        <div style={{ width: 1, height: 20, background: '#1a2332' }} />
+        <div style={{ width: 1, height: 20, background: 'var(--border-subtle)' }} />
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
           {DEPT_FILTERS.map((dept) => (
@@ -127,8 +127,8 @@ export function InboxClient({ contexts: initial }: Props) {
                 borderRadius: 5,
                 fontSize: 11,
                 cursor: 'pointer',
-                background: activeDept === dept ? 'rgba(62,207,207,0.08)' : 'transparent',
-                color: activeDept === dept ? '#3ecfcf' : '#3a4555',
+                background: activeDept === dept ? 'var(--accent-dim)' : 'transparent',
+                color: activeDept === dept ? 'var(--accent)' : 'var(--text-muted)',
                 border: 'none',
               }}
             >
@@ -137,7 +137,7 @@ export function InboxClient({ contexts: initial }: Props) {
           ))}
         </div>
 
-        <div style={{ marginLeft: 'auto', fontSize: 11, color: '#3a4555' }}>
+        <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
           {filtered.length} context{filtered.length !== 1 ? 's' : ''}
         </div>
       </div>
@@ -191,7 +191,7 @@ function ContextCard({
   const stale     = isStale(ctx)
   const entities  = ctx.entities_json as Record<string, string> | null
   const sevStyle  = ctx.severity ? (SEVERITY_STYLES[ctx.severity] ?? null) : null
-  const deptDot   = ctx.department ? (DEPT_DOT[ctx.department] ?? '#4a5a6a') : null
+  const deptDot   = ctx.department ? (DEPT_DOT[ctx.department] ?? 'var(--text-muted)') : null
 
   async function triggerAnalyze(e: React.MouseEvent) {
     e.stopPropagation()
@@ -203,9 +203,9 @@ function ContextCard({
   return (
     <div
       style={{
-        background: '#0d1117',
-        border: `1px solid ${unread ? 'rgba(62,207,207,0.3)' : '#1a2332'}`,
-        borderLeft: `3px solid ${unread ? '#3ecfcf' : 'transparent'}`,
+        background: 'var(--bg-surface)',
+        border: `1px solid ${unread ? 'rgba(var(--accent-rgb), 0.3)' : 'var(--border-subtle)'}`,
+        borderLeft: `3px solid ${unread ? 'var(--accent)' : 'transparent'}`,
         borderRadius: 10,
         overflow: 'hidden',
       }}
@@ -218,7 +218,7 @@ function ContextCard({
       >
         {/* Unread dot */}
         {unread && (
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#3ecfcf', marginTop: 5, flexShrink: 0 }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)', marginTop: 5, flexShrink: 0 }} />
         )}
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -236,8 +236,8 @@ function ContextCard({
                   fontWeight: 600,
                   padding: '2px 8px',
                   borderRadius: 4,
-                  background: 'rgba(62,207,207,0.07)',
-                  color: '#3ecfcf',
+                  background: 'var(--accent-dim)',
+                  color: 'var(--accent)',
                 }}
               >
                 {deptDot && (
@@ -249,7 +249,7 @@ function ContextCard({
 
             {/* Topic */}
             {ctx.topic_name && (
-              <span style={{ fontSize: 11, fontWeight: 500, color: '#6a7e92' }}>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-secondary)' }}>
                 {ctx.topic_name}
               </span>
             )}
@@ -278,7 +278,7 @@ function ContextCard({
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 3,
                   fontSize: 10, padding: '2px 7px', borderRadius: 4,
-                  background: 'rgba(255,140,66,0.1)', color: '#ff8c42',
+                  background: 'rgba(227,179,65,0.1)', color: 'var(--severity-high)',
                 }}
               >
                 <AlertTriangle size={9} /> Alert
@@ -291,7 +291,7 @@ function ContextCard({
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 3,
                   fontSize: 10, padding: '2px 7px', borderRadius: 4,
-                  background: 'rgba(255,209,102,0.1)', color: '#ffd166',
+                  background: 'rgba(227,179,65,0.1)', color: 'var(--severity-high)',
                 }}
               >
                 <Eye size={9} /> Review
@@ -306,9 +306,9 @@ function ContextCard({
                 style={{
                   fontSize: 11,
                   fontWeight: 600,
-                  color: '#3ecfcf',
-                  background: 'rgba(62,207,207,0.08)',
-                  border: '1px solid rgba(62,207,207,0.2)',
+                  color: 'var(--accent)',
+                  background: 'var(--accent-dim)',
+                  border: '1px solid rgba(var(--accent-rgb), 0.2)',
                   borderRadius: 6,
                   padding: '3px 10px',
                   cursor: 'pointer',
@@ -329,7 +329,7 @@ function ContextCard({
             style={{
               fontSize: 13,
               marginTop: 6,
-              color: '#6a7e92',
+              color: 'var(--text-secondary)',
               lineHeight: 1.5,
               overflow: 'hidden',
               display: '-webkit-box',
@@ -342,12 +342,12 @@ function ContextCard({
 
           {/* Meta row */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3a4555' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
               <MessageSquare size={10} />
               {ctx.message_count} msg{ctx.message_count !== 1 ? 's' : ''}
             </span>
             {ctx.primary_sender && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3a4555' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
                 <User size={10} /> {ctx.primary_sender}
               </span>
             )}
@@ -356,23 +356,23 @@ function ContextCard({
                 style={{
                   fontSize: 10, fontWeight: 500,
                   padding: '1px 7px', borderRadius: 4,
-                  background: '#111820', color: '#4a5a6a',
+                  background: 'var(--bg-elevated)', color: 'var(--text-muted)',
                 }}
               >
                 {ctx.department}
               </span>
             )}
             {entities?.driver && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3a4555' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
                 <Truck size={10} /> {entities.driver}
               </span>
             )}
             {entities?.load && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3a4555' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
                 <Package size={10} /> {entities.load}
               </span>
             )}
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#3a4555', marginLeft: 'auto' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
               <Clock size={10} />
               {ctx.created_at ? formatDistanceToNow(new Date(ctx.created_at), { addSuffix: true }) : '—'}
             </span>
@@ -382,22 +382,22 @@ function ContextCard({
         {/* Expand toggle */}
         <div style={{ flexShrink: 0, marginTop: 2 }}>
           {isExpanded
-            ? <ChevronUp size={15} style={{ color: '#3a4555' }} />
-            : <ChevronDown size={15} style={{ color: '#3a4555' }} />}
+            ? <ChevronUp size={15} style={{ color: 'var(--text-muted)' }} />
+            : <ChevronDown size={15} style={{ color: 'var(--text-muted)' }} />}
         </div>
       </button>
 
       {/* Expanded detail */}
       {isExpanded && (
-        <div style={{ padding: '0 18px 18px', borderTop: '1px solid #111820' }}>
+        <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--border-subtle)' }}>
 
           {/* AI Summary */}
           {ctx.summary && (
             <div style={{ paddingTop: 14 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#3a4555', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
                 AI Summary
               </p>
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: '#8a9aaa' }}>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
                 {ctx.summary}
               </p>
             </div>
@@ -410,14 +410,14 @@ function ContextCard({
                 marginTop: 12,
                 padding: 12,
                 borderRadius: 8,
-                background: 'rgba(62,207,207,0.05)',
-                border: '1px solid rgba(62,207,207,0.12)',
+                background: 'var(--accent-glow2)',
+                border: '1px solid rgba(var(--accent-rgb), 0.12)',
               }}
             >
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#3ecfcf', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
                 Recommended Action
               </div>
-              <div style={{ fontSize: 12, color: '#c9d1d9', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-primary)', lineHeight: 1.5 }}>
                 {ctx.recommended_action}
               </div>
             </div>
@@ -426,10 +426,10 @@ function ContextCard({
           {/* Rationale */}
           {ctx.rationale && (
             <div style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#3a4555', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
                 AI Rationale
               </p>
-              <p style={{ fontSize: 12, color: '#4a5a6a', lineHeight: 1.5 }}>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
                 {ctx.rationale}
               </p>
             </div>
@@ -438,7 +438,7 @@ function ContextCard({
           {/* Raw context */}
           {ctx.context_text && (
             <div style={{ marginTop: 12 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#3a4555', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
                 Raw Context
               </p>
               <pre
@@ -446,9 +446,9 @@ function ContextCard({
                   fontSize: 11,
                   padding: 12,
                   borderRadius: 8,
-                  background: '#080d14',
-                  color: '#4a5a6a',
-                  border: '1px solid #1a2332',
+                  background: 'var(--bg-base)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border-subtle)',
                   fontFamily: 'monospace',
                   maxHeight: 200,
                   overflowY: 'auto',
@@ -462,7 +462,7 @@ function ContextCard({
           )}
 
           {/* Footer: AI status + confidence */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: 11, color: '#3a4555' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
             <span>
               AI:{' '}
               <span style={{ color: aiStatusColor(ctx.ai_status), fontWeight: 600 }}>
@@ -470,7 +470,7 @@ function ContextCard({
               </span>
             </span>
             {ctx.confidence != null && (
-              <span>Confidence: <span style={{ color: '#8a9aaa' }}>{ctx.confidence}%</span></span>
+              <span>Confidence: <span style={{ color: 'var(--text-secondary)' }}>{ctx.confidence}%</span></span>
             )}
             {ctx.analyzed_at && (
               <span>Analyzed {formatDistanceToNow(new Date(ctx.analyzed_at), { addSuffix: true })}</span>
@@ -480,7 +480,7 @@ function ContextCard({
               <button
                 onClick={async (e) => { e.stopPropagation(); setAnalyzing(true); await onReanalyze(ctx.id); setAnalyzing(false) }}
                 style={{
-                  fontSize: 11, fontWeight: 600, color: '#3ecfcf',
+                  fontSize: 11, fontWeight: 600, color: 'var(--accent)',
                   background: 'transparent', border: 'none',
                   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
                 }}
@@ -496,10 +496,10 @@ function ContextCard({
 }
 
 function aiStatusColor(status: string) {
-  if (status === 'done')       return '#56d364'
-  if (status === 'processing') return '#ffd166'
-  if (status === 'failed')     return '#ff4444'
-  return '#3a4555'
+  if (status === 'done')       return 'var(--severity-low)'
+  if (status === 'processing') return 'var(--severity-high)'
+  if (status === 'failed')     return 'var(--severity-critical)'
+  return 'var(--text-muted)'
 }
 
 function EmptyInbox({ hasData }: { hasData: boolean }) {
@@ -508,7 +508,7 @@ function EmptyInbox({ hasData }: { hasData: boolean }) {
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         gap: 16, padding: '64px 20px',
-        background: '#0d1117', border: '1px solid #1a2332', borderRadius: 12,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12,
       }}
     >
       <div
@@ -518,13 +518,13 @@ function EmptyInbox({ hasData }: { hasData: boolean }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Inbox size={22} style={{ color: '#2a3545' }} />
+        <Inbox size={22} style={{ color: 'var(--border-default)' }} />
       </div>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#6a7e92' }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
           {hasData ? 'No contexts match this filter' : 'Context Inbox is empty'}
         </p>
-        <p style={{ fontSize: 11, color: '#3a4555', marginTop: 4, maxWidth: 280, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, maxWidth: 280, lineHeight: 1.5 }}>
           {hasData
             ? 'Try selecting a different filter or department.'
             : 'Once you connect a Telegram source, Tori will analyze incoming messages and group them here automatically.'}
@@ -535,8 +535,8 @@ function EmptyInbox({ hasData }: { hasData: boolean }) {
           <button
             style={{
               fontSize: 12, padding: '6px 16px', borderRadius: 8,
-              background: 'rgba(62,207,207,0.1)', color: '#3ecfcf',
-              border: '1px solid rgba(62,207,207,0.2)', cursor: 'pointer', fontWeight: 600,
+              background: 'var(--accent-dim)', color: 'var(--accent)',
+              border: '1px solid rgba(var(--accent-rgb), 0.2)', cursor: 'pointer', fontWeight: 600,
             }}
           >
             Connect a source

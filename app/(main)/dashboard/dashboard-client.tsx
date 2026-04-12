@@ -35,7 +35,7 @@ function StatCard({
   return (
     <div
       className="relative rounded-xl p-5 flex flex-col gap-3 overflow-hidden"
-      style={{ background: '#0d1117', border: '1px solid #1a2332' }}
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
     >
       {/* Radial corner glow */}
       <div
@@ -48,7 +48,7 @@ function StatCard({
       <div className="flex items-center justify-between relative">
         <span
           className="text-xs font-semibold uppercase tracking-widest"
-          style={{ color: '#3a4a5a', letterSpacing: '0.1em' }}
+          style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}
         >
           {label}
         </span>
@@ -63,12 +63,12 @@ function StatCard({
       <div className="relative">
         <p
           className="text-3xl font-black leading-none"
-          style={{ color: '#e8edf2', letterSpacing: '-0.02em' }}
+          style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
         >
           {value}
         </p>
         {subtext && (
-          <p className="text-xs mt-1.5" style={{ color: '#3a4a5a' }}>{subtext}</p>
+          <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>{subtext}</p>
         )}
       </div>
     </div>
@@ -80,7 +80,8 @@ function HealthRing({ score }: { score: number }) {
   const r = 38
   const circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
-  const color = score >= 80 ? '#3ecfcf' : score >= 60 ? '#ffd166' : score >= 40 ? '#ff8c42' : '#ff4444'
+  const color = score >= 80 ? 'var(--severity-low)' : score >= 60 ? 'var(--severity-high)' : score >= 40 ? 'var(--severity-high)' : 'var(--severity-critical)'
+  const glowHex = score >= 80 ? '#56d364' : score >= 60 ? '#e3b341' : score >= 40 ? '#e3b341' : '#f85149'
   const label = score >= 80 ? 'Nominal' : score >= 60 ? 'Watch' : score >= 40 ? 'Alert' : 'Critical'
 
   return (
@@ -88,7 +89,7 @@ function HealthRing({ score }: { score: number }) {
       <div className="relative" style={{ width: 108, height: 108 }}>
         <svg width="108" height="108" viewBox="0 0 108 108">
           {/* Track */}
-          <circle cx="54" cy="54" r={r} fill="none" stroke="#1a2332" strokeWidth="7" />
+          <circle cx="54" cy="54" r={r} fill="none" stroke="var(--border-subtle)" strokeWidth="7" />
           {/* Tick marks */}
           {Array.from({ length: 20 }).map((_, i) => {
             const angle = (i / 20) * 360 - 90
@@ -101,7 +102,7 @@ function HealthRing({ score }: { score: number }) {
               <line
                 key={i}
                 x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="#1a2332"
+                stroke="var(--border-subtle)"
                 strokeWidth="1"
               />
             )
@@ -116,7 +117,7 @@ function HealthRing({ score }: { score: number }) {
             strokeDasharray={circ}
             strokeDashoffset={offset}
             transform="rotate(-90 54 54)"
-            style={{ transition: 'stroke-dashoffset 1.2s ease-out', filter: `drop-shadow(0 0 6px ${color}88)` }}
+            style={{ transition: 'stroke-dashoffset 1.2s ease-out', filter: `drop-shadow(0 0 6px ${glowHex}88)` }}
           />
           {/* Center score */}
           <text
@@ -135,7 +136,7 @@ function HealthRing({ score }: { score: number }) {
             textAnchor="middle"
             fontSize="8"
             fontWeight="600"
-            fill="#3a4a5a"
+            fill="var(--text-muted)"
             fontFamily="inherit"
             style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}
           >
@@ -147,12 +148,12 @@ function HealthRing({ score }: { score: number }) {
         <div
           className="absolute inset-0 rounded-full pointer-events-none"
           style={{
-            background: `radial-gradient(circle at center, ${color}08 0%, transparent 65%)`,
+            background: `radial-gradient(circle at center, ${glowHex}08 0%, transparent 65%)`,
           }}
         />
       </div>
 
-      <p className="text-xs font-medium text-center" style={{ color: '#3a4a5a' }}>
+      <p className="text-xs font-medium text-center" style={{ color: 'var(--text-muted)' }}>
         {score >= 80
           ? 'Operations nominal'
           : score >= 60
@@ -165,27 +166,27 @@ function HealthRing({ score }: { score: number }) {
 
 /* ─── Misc configs ───────────────────────────────────────────────────────── */
 const threadStatusConfig = {
-  open:       { label: 'Open',       color: '#3ecfcf', icon: Activity },
-  escalated:  { label: 'Escalated',  color: '#ff4444', icon: AlertTriangle },
-  unresolved: { label: 'Unresolved', color: '#ff8c42', icon: AlertTriangle },
-  resolved:   { label: 'Resolved',   color: '#6bcb77', icon: CheckCircle2 },
+  open:       { label: 'Open',       color: 'var(--accent)',            icon: Activity },
+  escalated:  { label: 'Escalated',  color: 'var(--severity-critical)', icon: AlertTriangle },
+  unresolved: { label: 'Unresolved', color: 'var(--severity-high)',     icon: AlertTriangle },
+  resolved:   { label: 'Resolved',   color: 'var(--severity-low)',      icon: CheckCircle2 },
 }
 
 const activityTypeConfig: Record<string, { label: string; color: string }> = {
-  call_outbound:  { label: 'Call Out',  color: '#3ecfcf' },
-  call_inbound:   { label: 'Call In',   color: '#6bcb77' },
-  telegram_sent:  { label: 'Telegram',  color: '#3ecfcf' },
-  email_sent:     { label: 'Email',     color: '#a855f7' },
-  kb_flagged:     { label: 'KB Flag',   color: '#ff4444' },
-  synthesis:      { label: 'Synthesis', color: '#ffd166' },
-  alert:          { label: 'Alert',     color: '#ff8c42' },
+  call_outbound:  { label: 'Call Out',  color: 'var(--accent)' },
+  call_inbound:   { label: 'Call In',   color: 'var(--severity-low)' },
+  telegram_sent:  { label: 'Telegram',  color: 'var(--accent)' },
+  email_sent:     { label: 'Email',     color: 'var(--kb-purple)' },
+  kb_flagged:     { label: 'KB Flag',   color: 'var(--severity-critical)' },
+  synthesis:      { label: 'Synthesis', color: 'var(--severity-high)' },
+  alert:          { label: 'Alert',     color: 'var(--severity-high)' },
 }
 
 const sourceTypeColor: Record<string, string> = {
-  telegram: '#3ecfcf',
-  email:    '#a855f7',
-  api:      '#ffd166',
-  webhook:  '#6bcb77',
+  telegram: 'var(--accent)',
+  email:    'var(--kb-purple)',
+  api:      'var(--severity-high)',
+  webhook:  'var(--severity-low)',
 }
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
@@ -203,7 +204,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
               style={{
                 fontSize: 20,
                 fontWeight: 900,
-                color: '#e6edf3',
+                color: 'var(--text-primary)',
                 letterSpacing: '-0.02em',
                 lineHeight: 1,
               }}
@@ -212,10 +213,10 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
             </h1>
             <span
               className="animate-pulse rounded-full"
-              style={{ width: 6, height: 6, background: '#3ecfcf', display: 'inline-block', marginTop: 2, flexShrink: 0 }}
+              style={{ width: 6, height: 6, background: 'var(--accent)', display: 'inline-block', marginTop: 2, flexShrink: 0 }}
             />
           </div>
-          <p style={{ fontSize: 11, color: '#3a4555', fontWeight: 500, letterSpacing: '0.02em' }}>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.02em' }}>
             {today} · {stats.openSituations > 0 ? `${stats.openSituations} open situations` : 'All clear'} · Tori active
           </p>
         </div>
@@ -226,7 +227,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         className="relative rounded-xl overflow-hidden"
         style={{
           background: 'linear-gradient(135deg, #0a1628 0%, #0d1f38 50%, #091525 100%)',
-          border: '1px solid rgba(62,207,207,0.2)',
+          border: '1px solid rgba(var(--accent-rgb), 0.2)',
           padding: '20px 24px',
         }}
       >
@@ -234,7 +235,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            backgroundImage: 'radial-gradient(circle, rgba(62,207,207,0.07) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(circle, rgba(var(--accent-rgb),0.07) 1px, transparent 1px)',
             backgroundSize: '20px 20px',
             maskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 70%, transparent 100%)',
             WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 30%, black 70%, transparent 100%)',
@@ -250,7 +251,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
             width: 160,
             height: 160,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(62,207,207,0.12) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(var(--accent-rgb),0.12) 0%, transparent 70%)',
           }}
         />
 
@@ -261,9 +262,9 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
               className="w-11 h-11 rounded-full flex items-center justify-center"
               style={{
                 background: 'linear-gradient(135deg, #0f2040, #162d4a)',
-                border: '1.5px solid rgba(62,207,207,0.5)',
-                boxShadow: '0 0 16px rgba(62,207,207,0.2), inset 0 0 10px rgba(62,207,207,0.05)',
-                color: '#3ecfcf',
+                border: '1.5px solid rgba(var(--accent-rgb), 0.5)',
+                boxShadow: '0 0 16px rgba(var(--accent-rgb), 0.2), inset 0 0 10px rgba(var(--accent-rgb), 0.05)',
+                color: 'var(--accent)',
               }}
             >
               <Bot size={20} />
@@ -272,23 +273,23 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
             <span
               className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full"
               style={{
-                background: '#3ecfcf',
+                background: 'var(--accent)',
                 border: '2px solid #091525',
-                boxShadow: '0 0 6px rgba(62,207,207,0.8)',
+                boxShadow: '0 0 6px rgba(var(--accent-rgb), 0.8)',
               }}
             />
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#3ecfcf' }}>Tori</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>Tori</span>
               <span
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: 'rgba(62,207,207,0.7)',
-                  background: 'rgba(62,207,207,0.1)',
-                  border: '1px solid rgba(62,207,207,0.2)',
+                  color: 'var(--accent)',
+                  background: 'var(--accent-dim)',
+                  border: '1px solid rgba(var(--accent-rgb), 0.2)',
                   borderRadius: 20,
                   padding: '2px 8px',
                   letterSpacing: '0.04em',
@@ -299,19 +300,19 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
             </div>
 
             {stats.openSituations === 0 && stats.kbViolations === 0 ? (
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: '#6a7e92' }}>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
                 Good morning. All systems nominal — no open situations or compliance flags. Connect your first source below to start monitoring your fleet communications.
               </p>
             ) : (
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: '#6a7e92' }}>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
                 You have{' '}
-                <span style={{ color: '#c8d8e8', fontWeight: 600 }}>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
                   {stats.openSituations} open situation{stats.openSituations !== 1 ? 's' : ''}
                 </span>
                 {stats.kbViolations > 0 && (
                   <>
                     {' '}and{' '}
-                    <span style={{ color: '#ff4444', fontWeight: 600 }}>
+                    <span style={{ color: 'var(--severity-critical)', fontWeight: 600 }}>
                       {stats.kbViolations} KB violation{stats.kbViolations !== 1 ? 's' : ''}
                     </span>
                   </>
@@ -331,11 +332,11 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                     borderRadius: 8,
                     fontSize: 12,
                     fontWeight: 600,
-                    background: '#3ecfcf',
-                    color: '#060d18',
+                    background: 'var(--accent)',
+                    color: '#ffffff',
                     border: 'none',
                     cursor: 'pointer',
-                    boxShadow: '0 0 12px rgba(62,207,207,0.3)',
+                    boxShadow: '0 0 12px rgba(var(--accent-rgb),0.3)',
                   }}
                 >
                   <Phone size={12} /> Call Tori
@@ -351,9 +352,9 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                     borderRadius: 8,
                     fontSize: 12,
                     fontWeight: 600,
-                    background: 'rgba(62,207,207,0.1)',
-                    color: '#3ecfcf',
-                    border: '1px solid rgba(62,207,207,0.25)',
+                    background: 'var(--accent-dim)',
+                    color: 'var(--accent)',
+                    border: '1px solid rgba(var(--accent-rgb),0.25)',
                     cursor: 'pointer',
                   }}
                 >
@@ -371,8 +372,8 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                     fontSize: 12,
                     fontWeight: 600,
                     background: 'rgba(255,255,255,0.04)',
-                    color: '#4a5a6a',
-                    border: '1px solid #1a2332',
+                    color: 'var(--text-muted)',
+                    border: '1px solid var(--border-subtle)',
                     cursor: 'pointer',
                   }}
                 >
@@ -397,21 +398,21 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           label="Resolved Today"
           value={stats.resolvedToday}
           icon={CheckCircle2}
-          glowColor="#6bcb77"
+          glowColor="#56d364"
           subtext="Since midnight"
         />
         <StatCard
           label="Health Score"
           value={`${stats.healthScore}%`}
           icon={Activity}
-          glowColor={stats.healthScore >= 80 ? '#3ecfcf' : stats.healthScore >= 60 ? '#ffd166' : '#ff4444'}
+          glowColor={stats.healthScore >= 80 ? '#56d364' : stats.healthScore >= 60 ? '#e3b341' : '#f85149'}
           subtext="Fleet operations"
         />
         <StatCard
           label="KB Violations"
           value={stats.kbViolations}
           icon={ShieldCheck}
-          glowColor={stats.kbViolations > 0 ? '#ff4444' : '#6bcb77'}
+          glowColor={stats.kbViolations > 0 ? '#f85149' : '#56d364'}
           subtext="Open compliance flags"
         />
       </div>
@@ -420,18 +421,18 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Open situations */}
-        <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1a2332' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <div
             className="flex items-center justify-between"
-            style={{ padding: '14px 20px', borderBottom: '1px solid #1a2332' }}
+            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8d8e8', letterSpacing: '-0.01em' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Open Situations
             </span>
             <Link
               href="/situations"
               className="flex items-center gap-1"
-              style={{ fontSize: 11, color: '#3ecfcf', fontWeight: 600 }}
+              style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}
             >
               View all <ChevronRight size={11} />
             </Link>
@@ -455,7 +456,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                     key={thread.id}
                     href={`/situations/${thread.id}`}
                     className="flex items-start gap-3 transition-colors"
-                    style={{ padding: '12px 20px', borderBottom: '1px solid #111820', display: 'flex' }}
+                    style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex' }}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.018)' }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
                   >
@@ -464,12 +465,12 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                       style={{ color: status.color, marginTop: 1, flexShrink: 0 }}
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="truncate" style={{ fontSize: 12.5, fontWeight: 600, color: '#c8d8e8' }}>
+                      <p className="truncate" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                         {thread.title}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         {thread.department && (
-                          <span style={{ fontSize: 11, color: '#3a4a5a' }}>{thread.department}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{thread.department}</span>
                         )}
                         {thread.severity_peak && (
                           <SeverityBadge severity={thread.severity_peak as AlertSeverity} />
@@ -480,8 +481,8 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                               fontSize: 10,
                               padding: '1px 6px',
                               borderRadius: 4,
-                              background: 'rgba(168,85,247,0.12)',
-                              color: '#a855f7',
+                              background: 'var(--kb-purple-dim)',
+                              color: 'var(--kb-purple)',
                               fontWeight: 600,
                             }}
                           >
@@ -490,7 +491,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                         )}
                       </div>
                     </div>
-                    <span style={{ fontSize: 11, color: '#3a4a5a', flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
                       {formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}
                     </span>
                   </Link>
@@ -504,18 +505,18 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Recent alerts */}
-          <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1a2332' }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
             <div
               className="flex items-center justify-between"
-              style={{ padding: '14px 20px', borderBottom: '1px solid #1a2332' }}
+              style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#c8d8e8', letterSpacing: '-0.01em' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                 Recent Alerts
               </span>
               <Link
                 href="/alerts"
                 className="flex items-center gap-1"
-                style={{ fontSize: 11, color: '#3ecfcf', fontWeight: 600 }}
+                style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}
               >
                 View all <ChevronRight size={11} />
               </Link>
@@ -523,21 +524,21 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
 
             {recentAlerts.length === 0 ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>
-                <p style={{ fontSize: 12, color: '#3a4a5a' }}>No active alerts</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No active alerts</p>
               </div>
             ) : (
               recentAlerts.map((alert) => (
                 <div
                   key={alert.id}
                   className="flex items-start gap-3"
-                  style={{ padding: '10px 20px', borderBottom: '1px solid #111820' }}
+                  style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)' }}
                 >
                   <SeverityDot severity={alert.severity} />
                   <div className="flex-1 min-w-0">
-                    <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: '#c8d8e8' }}>
+                    <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
                       {alert.title}
                     </p>
-                    <p style={{ fontSize: 11, color: '#3a4a5a', marginTop: 2 }}>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                       {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
                     </p>
                   </div>
@@ -547,8 +548,8 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                         fontSize: 10,
                         padding: '1px 6px',
                         borderRadius: 4,
-                        background: 'rgba(168,85,247,0.12)',
-                        color: '#a855f7',
+                        background: 'var(--kb-purple-dim)',
+                        color: 'var(--kb-purple)',
                         fontWeight: 600,
                         flexShrink: 0,
                       }}
@@ -562,18 +563,18 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           </div>
 
           {/* Tori activity */}
-          <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1a2332' }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
             <div
               className="flex items-center justify-between"
-              style={{ padding: '14px 20px', borderBottom: '1px solid #1a2332' }}
+              style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#c8d8e8', letterSpacing: '-0.01em' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                 Tori Activity
               </span>
               <Link
                 href="/briefing"
                 className="flex items-center gap-1"
-                style={{ fontSize: 11, color: '#3ecfcf', fontWeight: 600 }}
+                style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}
               >
                 Full log <ChevronRight size={11} />
               </Link>
@@ -581,16 +582,16 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
 
             {toriActivity.length === 0 ? (
               <div style={{ padding: '20px', textAlign: 'center' }}>
-                <p style={{ fontSize: 12, color: '#3a4a5a' }}>No recent activity</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No recent activity</p>
               </div>
             ) : (
               toriActivity.map((act) => {
-                const cfg = activityTypeConfig[act.activity_type] ?? { label: act.activity_type, color: '#3ecfcf' }
+                const cfg = activityTypeConfig[act.activity_type] ?? { label: act.activity_type, color: 'var(--accent)' }
                 return (
                   <div
                     key={act.id}
                     className="flex items-start gap-3"
-                    style={{ padding: '10px 20px', borderBottom: '1px solid #111820' }}
+                    style={{ padding: '10px 20px', borderBottom: '1px solid var(--border-subtle)' }}
                   >
                     <div
                       className="flex items-center justify-center flex-shrink-0"
@@ -605,10 +606,10 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                       <Zap size={10} style={{ color: cfg.color }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: '#c8d8e8' }}>
+                      <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
                         {act.title}
                       </p>
-                      <p style={{ fontSize: 11, color: '#3a4a5a', marginTop: 2 }}>
+                      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                         {formatDistanceToNow(new Date(act.created_at), { addSuffix: true })}
                       </p>
                     </div>
@@ -641,8 +642,8 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         <div
           className="rounded-xl flex flex-col items-center justify-center"
           style={{
-            background: '#0d1117',
-            border: '1px solid #1a2332',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
             padding: '24px 20px',
             gap: 0,
           }}
@@ -651,11 +652,11 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         </div>
 
         {/* Active sources */}
-        <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1a2332' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <div
-            style={{ padding: '14px 20px', borderBottom: '1px solid #1a2332' }}
+            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8d8e8', letterSpacing: '-0.01em' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Active Sources
             </span>
           </div>
@@ -663,16 +664,16 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
           <div style={{ padding: '12px 20px' }}>
             {sources.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                <p style={{ fontSize: 12, color: '#3a4a5a', marginBottom: 12 }}>No sources connected</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>No sources connected</p>
                 <Link href="/sources">
                   <button
                     style={{
                       fontSize: 12,
                       padding: '6px 14px',
                       borderRadius: 8,
-                      background: 'rgba(62,207,207,0.1)',
-                      color: '#3ecfcf',
-                      border: '1px solid rgba(62,207,207,0.2)',
+                      background: 'var(--accent-dim)',
+                      color: 'var(--accent)',
+                      border: '1px solid rgba(var(--accent-rgb),0.2)',
                       cursor: 'pointer',
                       fontWeight: 600,
                     }}
@@ -684,7 +685,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {sources.map((src) => {
-                  const dot = sourceTypeColor[src.type] ?? '#4a5a6a'
+                  const dot = sourceTypeColor[src.type] ?? 'var(--text-muted)'
                   return (
                     <div key={src.id} className="flex items-center gap-2.5">
                       {/* 6px type dot */}
@@ -699,7 +700,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                       />
                       <span
                         className="flex-1 truncate"
-                        style={{ fontSize: 12.5, fontWeight: 500, color: '#8a9aaa' }}
+                        style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)' }}
                       >
                         {src.name}
                       </span>
@@ -726,24 +727,24 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
         </div>
 
         {/* Brain status */}
-        <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1a2332' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <div
             className="flex items-center gap-2"
-            style={{ padding: '14px 20px', borderBottom: '1px solid #1a2332' }}
+            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
           >
-            <Brain size={13} style={{ color: '#3ecfcf' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8d8e8', letterSpacing: '-0.01em' }}>
+            <Brain size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Brain Status
             </span>
           </div>
 
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="#3ecfcf" />
-            <BrainRow label="Threads Today" value={brainStatus.threadsToday} color="#6bcb77" />
+            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="var(--accent)" />
+            <BrainRow label="Threads Today" value={brainStatus.threadsToday} color="var(--severity-low)" />
             <BrainRow
               label="AI Suggestions Pending"
               value={brainStatus.aiSuggestionsPending}
-              color={brainStatus.aiSuggestionsPending > 0 ? '#ffd166' : '#4a5a6a'}
+              color={brainStatus.aiSuggestionsPending > 0 ? 'var(--severity-high)' : 'var(--text-muted)'}
               accent={brainStatus.aiSuggestionsPending > 0}
             />
 
@@ -753,7 +754,7 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                 style={{
                   height: 3,
                   borderRadius: 2,
-                  background: '#1a2332',
+                  background: 'var(--border-subtle)',
                   overflow: 'hidden',
                 }}
               >
@@ -761,13 +762,13 @@ export function DashboardClient({ stats, openThreads, recentAlerts, sources, tor
                   style={{
                     height: '100%',
                     width: `${Math.min(100, (brainStatus.threadsToday / 20) * 100)}%`,
-                    background: 'linear-gradient(90deg, #3ecfcf, #3ecfcf88)',
+                    background: 'linear-gradient(90deg, var(--accent), rgba(var(--accent-rgb),0.5))',
                     borderRadius: 2,
                     transition: 'width 1s ease-out',
                   }}
                 />
               </div>
-              <p style={{ fontSize: 10, color: '#2a3a4a', marginTop: 5, fontWeight: 500 }}>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, fontWeight: 500 }}>
                 Tori processed {brainStatus.threadsToday} threads today
               </p>
             </div>
@@ -793,12 +794,12 @@ function BrainRow({
 }) {
   return (
     <div className="flex items-center justify-between">
-      <span style={{ fontSize: 12, color: '#4a5a6a' }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
       <span
         style={{
           fontSize: 14,
           fontWeight: 800,
-          color: accent && value > 0 ? color : '#8a9aaa',
+          color: accent && value > 0 ? color : 'var(--text-muted)',
           letterSpacing: '-0.02em',
         }}
       >
@@ -810,12 +811,12 @@ function BrainRow({
 
 function SeverityDot({ severity }: { severity: string }) {
   const colors: Record<string, string> = {
-    critical: '#ff4444',
-    high: '#ff8c42',
-    medium: '#ffd166',
-    low: '#6bcb77',
+    critical: 'var(--severity-critical)',
+    high:     'var(--severity-high)',
+    medium:   'var(--severity-medium)',
+    low:      'var(--severity-low)',
   }
-  const c = colors[severity] ?? '#4a5a6a'
+  const c = colors[severity] ?? 'var(--text-muted)'
   return (
     <div
       className="rounded-full flex-shrink-0"
@@ -850,17 +851,17 @@ function EmptyState({
           width: 36,
           height: 36,
           borderRadius: '50%',
-          background: 'rgba(62,207,207,0.07)',
+          background: 'var(--accent-dim)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon size={16} style={{ color: '#3a4a5a' }} />
+        <Icon size={16} style={{ color: 'var(--text-muted)' }} />
       </div>
       <div>
-        <p style={{ fontSize: 12.5, fontWeight: 600, color: '#6a7e92' }}>{title}</p>
-        <p style={{ fontSize: 11, color: '#3a4a5a', marginTop: 4 }}>{desc}</p>
+        <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>{title}</p>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{desc}</p>
       </div>
       <Link href={href}>
         <button
@@ -868,9 +869,9 @@ function EmptyState({
             fontSize: 11,
             padding: '5px 12px',
             borderRadius: 7,
-            background: 'rgba(62,207,207,0.08)',
-            color: '#3ecfcf',
-            border: '1px solid rgba(62,207,207,0.2)',
+            background: 'var(--accent-dim)',
+            color: 'var(--accent)',
+            border: '1px solid rgba(var(--accent-rgb),0.2)',
             cursor: 'pointer',
             fontWeight: 600,
           }}

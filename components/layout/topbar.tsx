@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Bell, Settings, User, Send, ChevronRight, Check, X } from 'lucide-react'
+import { Bell, Settings, User, Send, ChevronRight, Check, X, Sun, Moon } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
+import { useTheme } from '@/components/theme-provider'
 
 interface PendingSource {
   id: string
@@ -25,6 +26,7 @@ export function Topbar() {
   const [activating, setActivating]         = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router      = useRouter()
+  const { theme, toggle } = useTheme()
 
   // ── Poll for pending sources every 30 s ─────────────────────────
   const fetchPending = useCallback(async () => {
@@ -98,8 +100,8 @@ export function Topbar() {
       style={{
         height: 48,
         padding: '0 20px',
-        background: '#080d14',
-        borderBottom: '1px solid #1a2332',
+        background: 'var(--topbar-bg)',
+        borderBottom: '1px solid var(--topbar-border)',
         position: 'relative',
         zIndex: 40,
       }}
@@ -112,20 +114,20 @@ export function Topbar() {
             fontWeight: 600,
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
-            color: '#2a3545',
+            color: 'var(--topbar-label)',
           }}
         >
           Operations Intelligence
         </span>
         {/* separator */}
-        <div style={{ width: 1, height: 12, background: '#1e2530', margin: '0 12px', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 12, background: 'var(--border-subtle)', margin: '0 12px', flexShrink: 0 }} />
         {/* live pulse */}
         <div className="flex items-center" style={{ gap: 6 }}>
           <div
             className="animate-pulse rounded-full"
-            style={{ width: 6, height: 6, background: '#56d364', flexShrink: 0 }}
+            style={{ width: 6, height: 6, background: 'var(--severity-low)', flexShrink: 0 }}
           />
-          <span style={{ fontSize: 9, fontWeight: 500, color: '#3a4555' }}>Live</span>
+          <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--text-muted)' }}>Live</span>
         </div>
       </div>
 
@@ -136,8 +138,8 @@ export function Topbar() {
         <div
           className="flex items-center"
           style={{
-            background: 'rgba(62,207,207,0.07)',
-            border: '1px solid rgba(62,207,207,0.18)',
+            background: 'var(--accent-dim)',
+            border: '1px solid rgba(var(--accent-rgb), 0.18)',
             borderRadius: 20,
             padding: '4px 12px',
             gap: 7,
@@ -146,17 +148,47 @@ export function Topbar() {
           <span className="relative flex-shrink-0" style={{ width: 6, height: 6 }}>
             <span
               className="animate-ping absolute inline-flex rounded-full"
-              style={{ width: '100%', height: '100%', background: '#3ecfcf', opacity: 0.5 }}
+              style={{ width: '100%', height: '100%', background: 'var(--accent)', opacity: 0.5 }}
             />
             <span
               className="relative inline-flex rounded-full"
-              style={{ width: 6, height: 6, background: '#3ecfcf', boxShadow: '0 0 6px rgba(62,207,207,0.8)' }}
+              style={{ width: 6, height: 6, background: 'var(--accent)', boxShadow: '0 0 6px var(--accent-glow)' }}
             />
           </span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#3ecfcf', letterSpacing: '0.01em' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.01em' }}>
             Tori Active
           </span>
         </div>
+
+        {/* ── Theme toggle ── */}
+        <button
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          onClick={toggle}
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: 'transparent',
+            border: '1px solid var(--topbar-icon-border)',
+            color: 'var(--topbar-icon)',
+            cursor: 'pointer',
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.background = 'rgba(var(--accent-rgb), 0.08)'
+            el.style.color = 'var(--accent)'
+            el.style.borderColor = 'rgba(var(--accent-rgb), 0.3)'
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLButtonElement
+            el.style.background = 'transparent'
+            el.style.color = 'var(--topbar-icon)'
+            el.style.borderColor = 'var(--topbar-icon-border)'
+          }}
+        >
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
 
         {/* ── Notification Bell ── */}
         <div className="relative" ref={dropdownRef}>
@@ -168,21 +200,21 @@ export function Topbar() {
               width: 30,
               height: 30,
               borderRadius: 8,
-              background: open ? 'rgba(255,255,255,0.04)' : 'transparent',
-              border: `1px solid ${badgeCount > 0 ? 'rgba(255,75,75,0.3)' : '#1a2332'}`,
-              color: badgeCount > 0 ? '#ff6b6b' : '#4a5a6a',
+              background: open ? 'rgba(var(--accent-rgb), 0.04)' : 'transparent',
+              border: `1px solid ${badgeCount > 0 ? 'var(--bell-error-border)' : 'var(--topbar-icon-border)'}`,
+              color: badgeCount > 0 ? 'var(--bell-error)' : 'var(--topbar-icon)',
               cursor: 'pointer',
               position: 'relative',
             }}
             onMouseEnter={(e) => {
               const el = e.currentTarget
-              el.style.background = 'rgba(255,255,255,0.04)'
-              el.style.color = badgeCount > 0 ? '#ff6b6b' : '#8d96a0'
+              el.style.background = 'rgba(var(--accent-rgb), 0.04)'
+              el.style.color = badgeCount > 0 ? 'var(--bell-error)' : 'var(--text-secondary)'
             }}
             onMouseLeave={(e) => {
               const el = e.currentTarget
-              el.style.background = open ? 'rgba(255,255,255,0.04)' : 'transparent'
-              el.style.color = badgeCount > 0 ? '#ff6b6b' : '#4a5a6a'
+              el.style.background = open ? 'rgba(var(--accent-rgb), 0.04)' : 'transparent'
+              el.style.color = badgeCount > 0 ? 'var(--bell-error)' : 'var(--topbar-icon)'
             }}
           >
             <Bell size={14} />
@@ -195,11 +227,11 @@ export function Topbar() {
                   width: 14,
                   height: 14,
                   borderRadius: '50%',
-                  background: '#ff4444',
+                  background: 'var(--severity-critical)',
                   color: '#fff',
                   fontSize: 9,
                   fontWeight: 700,
-                  border: '1.5px solid #080d14',
+                  border: '1.5px solid var(--topbar-bg)',
                   lineHeight: 1,
                 }}
               >
@@ -216,10 +248,10 @@ export function Topbar() {
                 top: 40,
                 right: 0,
                 width: 340,
-                background: '#0d1117',
-                border: '1px solid #1e2530',
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: 12,
-                boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
                 overflow: 'hidden',
                 zIndex: 50,
               }}
@@ -227,9 +259,9 @@ export function Topbar() {
               {/* Header */}
               <div
                 className="flex items-center justify-between"
-                style={{ padding: '14px 16px', borderBottom: '1px solid #1e2530' }}
+                style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}
               >
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#e6edf3' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
                   Notifications
                 </span>
                 {badgeCount > 0 && (
@@ -237,9 +269,9 @@ export function Topbar() {
                     style={{
                       fontSize: 10,
                       fontWeight: 700,
-                      color: '#ff6b6b',
-                      background: 'rgba(255,75,75,0.12)',
-                      border: '1px solid rgba(255,75,75,0.2)',
+                      color: 'var(--bell-error)',
+                      background: 'var(--bell-error-bg)',
+                      border: '1px solid var(--bell-error-border)',
                       borderRadius: 20,
                       padding: '2px 7px',
                     }}
@@ -277,10 +309,10 @@ export function Topbar() {
                 className="flex items-center gap-1"
                 style={{
                   padding: '10px 16px',
-                  borderTop: '1px solid #1e2530',
+                  borderTop: '1px solid var(--border-subtle)',
                   fontSize: 11,
                   fontWeight: 600,
-                  color: '#3ecfcf',
+                  color: 'var(--accent)',
                   textDecoration: 'none',
                 }}
               >
@@ -302,9 +334,9 @@ export function Topbar() {
             width: 28,
             height: 28,
             borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1a2d3e, #0f1e2d)',
-            border: '1.5px solid rgba(62,207,207,0.3)',
-            color: '#4a6a7a',
+            background: 'var(--accent-dim)',
+            border: '1.5px solid rgba(var(--accent-rgb), 0.3)',
+            color: 'var(--text-secondary)',
           }}
         >
           <User size={13} />
@@ -343,12 +375,12 @@ function NotificationItem({
     <div
       style={{
         padding: '12px 16px',
-        borderBottom: '1px solid #1a2030',
+        borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         alignItems: 'flex-start',
         gap: 10,
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.02)' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)' }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
     >
       {/* Telegram icon */}
@@ -357,7 +389,7 @@ function NotificationItem({
           width: 30,
           height: 30,
           borderRadius: 8,
-          background: 'rgba(62,207,207,0.08)',
+          background: 'var(--accent-dim)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -365,12 +397,12 @@ function NotificationItem({
           marginTop: 1,
         }}
       >
-        <Send size={13} style={{ color: '#3ecfcf' }} />
+        <Send size={13} style={{ color: 'var(--accent)' }} />
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, color: '#8d96a0', marginBottom: 2 }}>
+        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>
           New group detected
         </p>
 
@@ -387,9 +419,9 @@ function NotificationItem({
               width: '100%',
               fontSize: 13,
               fontWeight: 600,
-              color: '#e6edf3',
-              background: 'rgba(62,207,207,0.06)',
-              border: '1px solid rgba(62,207,207,0.3)',
+              color: 'var(--text-primary)',
+              background: 'var(--accent-dim)',
+              border: '1px solid rgba(var(--accent-rgb), 0.3)',
               borderRadius: 6,
               padding: '3px 8px',
               outline: 'none',
@@ -402,7 +434,7 @@ function NotificationItem({
             style={{
               fontSize: 13,
               fontWeight: 700,
-              color: '#3ecfcf',
+              color: 'var(--accent)',
               background: 'none',
               border: 'none',
               cursor: 'text',
@@ -422,11 +454,11 @@ function NotificationItem({
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: '#4a5a6a', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
             {src.external_id}
           </span>
-          <span style={{ fontSize: 10, color: '#2a3545' }}>·</span>
-          <span style={{ fontSize: 10, color: '#3a4555' }}>{timeAgo}</span>
+          <span style={{ fontSize: 10, color: 'var(--border-default)' }}>·</span>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo}</span>
         </div>
       </div>
 
@@ -440,9 +472,9 @@ function NotificationItem({
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: '#3ecfcf',
-                background: 'rgba(62,207,207,0.12)',
-                border: '1px solid rgba(62,207,207,0.3)',
+                color: 'var(--accent)',
+                background: 'var(--accent-dim)',
+                border: '1px solid rgba(var(--accent-rgb), 0.3)',
                 borderRadius: 6,
                 padding: '4px 10px',
                 cursor: 'pointer',
@@ -459,9 +491,9 @@ function NotificationItem({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: '#4a5a6a',
+                color: 'var(--text-secondary)',
                 background: 'transparent',
-                border: '1px solid #1e2530',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: 6,
                 padding: '4px 10px',
                 cursor: 'pointer',
@@ -481,17 +513,17 @@ function NotificationItem({
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: '#3ecfcf',
-              background: 'rgba(62,207,207,0.12)',
-              border: '1px solid rgba(62,207,207,0.25)',
+              color: 'var(--accent)',
+              background: 'var(--accent-dim)',
+              border: '1px solid rgba(var(--accent-rgb), 0.25)',
               borderRadius: 6,
               padding: '4px 10px',
               cursor: 'pointer',
               opacity: isActivating ? 0.6 : 1,
               whiteSpace: 'nowrap',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(62,207,207,0.2)' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(62,207,207,0.12)' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(var(--accent-rgb), 0.2)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-dim)' }}
           >
             {isActivating ? 'Activating…' : 'Activate'}
           </button>
@@ -514,11 +546,11 @@ function EmptyNotifications() {
         textAlign: 'center',
       }}
     >
-      <Send size={26} style={{ color: '#2a3545' }} />
-      <p style={{ fontSize: 12, fontWeight: 600, color: '#4a5a6a' }}>
+      <Send size={26} style={{ color: 'var(--border-default)' }} />
+      <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
         No new groups detected
       </p>
-      <p style={{ fontSize: 11, color: '#3a4555', lineHeight: 1.5, maxWidth: 240 }}>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 240 }}>
         Add your bot to a Telegram group and SATORI will detect it automatically
       </p>
     </div>
@@ -536,19 +568,19 @@ function IconBtn({ children, label }: { children: React.ReactNode; label: string
         height: 30,
         borderRadius: 8,
         background: 'transparent',
-        border: '1px solid #1a2332',
-        color: '#4a5a6a',
+        border: '1px solid var(--topbar-icon-border)',
+        color: 'var(--topbar-icon)',
         cursor: 'pointer',
       }}
       onMouseEnter={(e) => {
         const el = e.currentTarget as HTMLButtonElement
-        el.style.background = 'rgba(255,255,255,0.04)'
-        el.style.color = '#8d96a0'
+        el.style.background = 'var(--bg-hover)'
+        el.style.color = 'var(--text-secondary)'
       }}
       onMouseLeave={(e) => {
         const el = e.currentTarget as HTMLButtonElement
         el.style.background = 'transparent'
-        el.style.color = '#4a5a6a'
+        el.style.color = 'var(--topbar-icon)'
       }}
     >
       {children}

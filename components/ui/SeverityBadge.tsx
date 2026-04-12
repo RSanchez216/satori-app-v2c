@@ -1,29 +1,25 @@
 import type { AlertSeverity } from '@/types/database'
 
-const CONFIG: Record<AlertSeverity, { label: string; color: string; bg: string; dot: string }> = {
+const CONFIG: Record<AlertSeverity, { label: string; color: string; bg: string }> = {
   critical: {
     label: 'Critical',
-    color: '#f85149',
-    bg:    'rgba(248,81,73,0.12)',
-    dot:   '#f85149',
+    color: 'var(--severity-critical)',
+    bg:    'rgba(var(--severity-critical-rgb, 248,81,73), 0.12)',
   },
   high: {
     label: 'High',
-    color: '#e3b341',
-    bg:    'rgba(227,179,65,0.12)',
-    dot:   '#e3b341',
+    color: 'var(--severity-high)',
+    bg:    'rgba(var(--severity-high-rgb, 227,179,65), 0.12)',
   },
   medium: {
     label: 'Medium',
-    color: '#3ecfcf',
-    bg:    'rgba(62,207,207,0.12)',
-    dot:   '#3ecfcf',
+    color: 'var(--severity-medium)',
+    bg:    'var(--accent-dim)',
   },
   low: {
     label: 'Low',
-    color: '#56d364',
-    bg:    'rgba(86,211,100,0.12)',
-    dot:   '#56d364',
+    color: 'var(--severity-low)',
+    bg:    'rgba(var(--severity-low-rgb, 86,211,100), 0.12)',
   },
 }
 
@@ -44,7 +40,7 @@ export function SeverityBadge({ severity, size = 'sm' }: Props) {
     >
       <span
         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-        style={{ background: c.dot }}
+        style={{ background: c.color }}
       />
       {c.label}
     </span>

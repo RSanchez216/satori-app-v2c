@@ -38,15 +38,15 @@ const SEVERITY_OPTIONS = [
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 const FREQ_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  daily:   { bg: 'rgba(62,207,207,0.1)',    color: '#3ecfcf',  label: 'Daily' },
-  weekly:  { bg: 'rgba(179,146,240,0.12)',  color: '#b392f0',  label: 'Weekly' },
-  monthly: { bg: 'rgba(227,179,65,0.1)',    color: '#e3b341',  label: 'Monthly' },
+  daily:   { bg: 'rgba(var(--accent-rgb),0.1)',   color: 'var(--accent)',        label: 'Daily' },
+  weekly:  { bg: 'var(--kb-purple-dim)',           color: 'var(--kb-purple)',     label: 'Weekly' },
+  monthly: { bg: 'rgba(227,179,65,0.1)',           color: 'var(--severity-high)', label: 'Monthly' },
 }
 
 const STATUS_STYLE: Record<string, { color: string; label: string }> = {
-  success: { color: '#56d364', label: 'Sent' },
-  partial: { color: '#e3b341', label: 'Partial' },
-  error:   { color: '#f85149', label: 'Error' },
+  success: { color: 'var(--severity-low)',      label: 'Sent' },
+  partial: { color: 'var(--severity-high)',     label: 'Partial' },
+  error:   { color: 'var(--severity-critical)', label: 'Error' },
 }
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
@@ -205,9 +205,9 @@ function getDeliveryRate(
     .flatMap(h => h.recipient_results as RecipientResult[])
     .filter(r => r.target === target)
 
-  if (results.length < 3) return { label: 'New', color: '#3a4555' }
+  if (results.length < 3) return { label: 'New', color: 'var(--text-muted)' }
   const pct   = Math.round(results.filter(r => r.status === 'success').length / results.length * 100)
-  const color = pct >= 90 ? '#56d364' : pct >= 70 ? '#e3b341' : '#f85149'
+  const color = pct >= 90 ? 'var(--severity-low)' : pct >= 70 ? 'var(--severity-high)' : 'var(--severity-critical)'
   return { label: `${pct}%`, color }
 }
 
@@ -217,13 +217,13 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button type="button" onClick={() => onChange(!checked)} style={{
       width: 40, height: 22, borderRadius: 11,
-      background: checked ? '#3ecfcf' : '#1e2530',
+      background: checked ? 'var(--accent)' : 'var(--border-subtle)',
       border: 'none', cursor: 'pointer', position: 'relative',
       transition: 'background 0.2s', flexShrink: 0, outline: 'none',
     }}>
       <div style={{
         width: 16, height: 16, borderRadius: '50%',
-        background: checked ? '#0a0f18' : '#4a5a6a',
+        background: checked ? '#ffffff' : 'var(--text-muted)',
         position: 'absolute', top: 3,
         left: checked ? 21 : 3, transition: 'left 0.2s',
       }} />
@@ -237,21 +237,21 @@ function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) 
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
       <select value={value} onChange={e => onChange(e.target.value)} style={{
         appearance: 'none', WebkitAppearance: 'none',
-        background: '#0a0f18', border: '1px solid #1e2530',
-        borderRadius: 8, color: '#e6edf3',
+        background: 'var(--bg-base)', border: '1px solid var(--border-subtle)',
+        borderRadius: 8, color: 'var(--text-primary)',
         padding: '7px 32px 7px 10px', fontSize: 13,
         cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
       }}>
         {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
-      <ChevronDown size={12} style={{ position: 'absolute', right: 9, color: '#4a5a6a', pointerEvents: 'none' }} />
+      <ChevronDown size={12} style={{ position: 'absolute', right: 9, color: 'var(--text-muted)', pointerEvents: 'none' }} />
     </div>
   )
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#4a5a6a', marginBottom: 7 }}>
+    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 7 }}>
       {children}
     </p>
   )
@@ -262,8 +262,8 @@ function Input({ value, onChange, placeholder, mono }: { value: string; onChange
     <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
       style={{
         width: '100%', boxSizing: 'border-box',
-        background: '#0a0f18', border: '1px solid #1e2530',
-        borderRadius: 8, color: '#e6edf3', padding: '8px 12px',
+        background: 'var(--bg-base)', border: '1px solid var(--border-subtle)',
+        borderRadius: 8, color: 'var(--text-primary)', padding: '8px 12px',
         fontSize: 13, outline: 'none',
         fontFamily: mono ? 'monospace' : 'inherit',
       }}
@@ -281,9 +281,9 @@ function IconBtn({ icon, label, onClick, primary, danger, loading, title }: {
       padding: '5px 10px', borderRadius: 7, fontSize: 11, fontWeight: 600,
       cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
       border: '1px solid',
-      background: primary ? '#3ecfcf' : 'transparent',
-      color:  primary ? '#0a0f18' : danger ? '#f85149' : '#6a7a8a',
-      borderColor: primary ? 'transparent' : danger ? 'rgba(248,81,73,0.25)' : '#1e2530',
+      background: primary ? 'var(--accent)' : 'transparent',
+      color:  primary ? '#ffffff' : danger ? 'var(--severity-critical)' : 'var(--text-secondary)',
+      borderColor: primary ? 'transparent' : danger ? 'rgba(248,81,73,0.25)' : 'var(--border-subtle)',
     }}>
       {loading ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : icon}
       {label}
@@ -320,31 +320,31 @@ function StatusTooltip({ row }: { row: BriefingHistory }) {
       {show && (
         <div style={{
           position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, zIndex: 200,
-          background: '#0d1117', border: '1px solid #1e2530', borderRadius: 10,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 10,
           padding: '10px 14px', minWidth: 260,
           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
           pointerEvents: 'none',
         }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
-            color: '#3a4555', marginBottom: 8 }}>Delivery Breakdown</p>
+            color: 'var(--text-muted)', marginBottom: 8 }}>Delivery Breakdown</p>
           {results.map((r, i) => (
             <div key={i} style={{
               display: 'flex', alignItems: 'flex-start', gap: 8,
               paddingBottom: i < results.length - 1 ? 7 : 0,
               marginBottom: i < results.length - 1 ? 7 : 0,
-              borderBottom: i < results.length - 1 ? '1px solid #111820' : 'none',
+              borderBottom: i < results.length - 1 ? '1px solid var(--border-subtle)' : 'none',
             }}>
               <span style={{ fontSize: 12, lineHeight: 1.4 }}>{r.status === 'success' ? '✅' : '❌'}</span>
               <span style={{ fontSize: 12 }}>{r.channel === 'telegram' ? '📱' : '✉️'}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 11.5, color: '#c8d8e8' }}>
+                <span style={{ fontSize: 11.5, color: 'var(--text-primary)' }}>
                   {r.label ? `${r.label} · ` : ''}
                 </span>
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#4a5a6a' }}>
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
                   {r.target.length > 26 ? r.target.slice(0, 26) + '…' : r.target}
                 </span>
                 {r.error && (
-                  <p style={{ fontSize: 10, color: '#f85149', marginTop: 3, lineHeight: 1.4 }}>{r.error}</p>
+                  <p style={{ fontSize: 10, color: 'var(--severity-critical)', marginTop: 3, lineHeight: 1.4 }}>{r.error}</p>
                 )}
               </div>
             </div>
@@ -361,7 +361,7 @@ function RecipientIcons({ row }: { row: BriefingHistory }) {
   const results = (row.recipient_results ?? []) as RecipientResult[]
 
   if (results.length === 0) {
-    return <span style={{ fontSize: 12, color: '#6a7a8a' }}>{row.recipients_succeeded}/{row.recipients_attempted}</span>
+    return <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{row.recipients_succeeded}/{row.recipients_attempted}</span>
   }
 
   return (
@@ -378,7 +378,7 @@ function RecipientIcons({ row }: { row: BriefingHistory }) {
           {r.channel === 'telegram' ? '📱' : '✉️'}
         </span>
       ))}
-      <span style={{ fontSize: 11, color: '#4a5a6a', marginLeft: 2 }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>
         {row.recipients_succeeded}/{row.recipients_attempted}
       </span>
     </div>
@@ -399,23 +399,23 @@ function FullPreviewModal({ row, onClose }: { row: BriefingHistory; onClose: () 
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: '#0d1117', border: '1px solid #1e2530', borderRadius: 16,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 16,
         width: '100%', maxWidth: 600, maxHeight: '85vh',
         display: 'flex', flexDirection: 'column',
         boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
       }}>
         {/* Header */}
-        <div style={{ padding: '18px 24px', borderBottom: '1px solid #111820',
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3' }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
               {row.briefings?.name ?? 'Briefing'}
             </p>
-            <p style={{ fontSize: 11.5, color: '#4a5a6a', marginTop: 2 }}>
+            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
               {format(new Date(row.sent_at), 'EEEE, MMMM d, yyyy · h:mm a')}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4a5a6a', padding: 4 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
             <X size={16} />
           </button>
         </div>
@@ -424,16 +424,16 @@ function FullPreviewModal({ row, onClose }: { row: BriefingHistory; onClose: () 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
 
           <div style={{
-            background: 'rgba(255,255,255,0.02)', border: '1px solid #1e2530',
+            background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
             borderRadius: 10, padding: 16, marginBottom: 20,
-            fontSize: 13, lineHeight: 1.75, color: '#c8d8e8',
+            fontSize: 13, lineHeight: 1.75, color: 'var(--text-primary)',
             whiteSpace: 'pre-wrap', fontFamily: 'Inter, sans-serif',
           }}>
             {text}
           </div>
 
           {truncated && (
-            <p style={{ fontSize: 11, color: '#3a4555', textAlign: 'center', marginBottom: 20 }}>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginBottom: 20 }}>
               Full message text not stored for older entries.
             </p>
           )}
@@ -441,22 +441,22 @@ function FullPreviewModal({ row, onClose }: { row: BriefingHistory; onClose: () 
           {results.length > 0 && (
             <div>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                color: '#3a4555', marginBottom: 10 }}>Delivery Breakdown</p>
+                color: 'var(--text-muted)', marginBottom: 10 }}>Delivery Breakdown</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {results.map((r, i) => (
                   <div key={i} style={{
                     display: 'flex', alignItems: 'center', gap: 10,
-                    background: 'rgba(255,255,255,0.02)', borderRadius: 8,
-                    padding: '8px 12px', border: '1px solid #1e2530',
+                    background: 'var(--bg-elevated)', borderRadius: 8,
+                    padding: '8px 12px', border: '1px solid var(--border-subtle)',
                   }}>
                     {r.status === 'success'
-                      ? <CheckCircle2 size={14} style={{ color: '#56d364', flexShrink: 0 }} />
-                      : <XCircle size={14} style={{ color: '#f85149', flexShrink: 0 }} />}
+                      ? <CheckCircle2 size={14} style={{ color: 'var(--severity-low)', flexShrink: 0 }} />
+                      : <XCircle size={14} style={{ color: 'var(--severity-critical)', flexShrink: 0 }} />}
                     <span style={{ fontSize: 14 }}>{r.channel === 'telegram' ? '📱' : '✉️'}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      {r.label && <span style={{ fontSize: 12, color: '#c8d8e8' }}>{r.label} · </span>}
-                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#4a5a6a' }}>{r.target}</span>
-                      {r.error && <p style={{ fontSize: 11, color: '#f85149', marginTop: 2 }}>{r.error}</p>}
+                      {r.label && <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{r.label} · </span>}
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>{r.target}</span>
+                      {r.error && <p style={{ fontSize: 11, color: 'var(--severity-critical)', marginTop: 2 }}>{r.error}</p>}
                     </div>
                   </div>
                 ))}
@@ -490,14 +490,14 @@ function SendConfirmPopover({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }} onClick={e => e.target === e.currentTarget && onCancel()}>
       <div style={{
-        background: '#0d1117', border: '1px solid #1e2530', borderRadius: 14,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 14,
         padding: '20px 24px', width: '100%', maxWidth: 380,
         boxShadow: '0 8px 40px rgba(0,0,0,0.7)',
       }}>
-        <p style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3', marginBottom: 4 }}>
+        <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
           Send {briefing.name} now?
         </p>
-        <p style={{ fontSize: 12, color: '#4a5a6a', marginBottom: 14 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
           Generates a fresh briefing and delivers immediately.
         </p>
 
@@ -506,13 +506,13 @@ function SendConfirmPopover({
           {active.map(r => (
             <div key={r.id} style={{
               display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(255,255,255,0.03)', borderRadius: 7,
-              padding: '7px 10px', border: '1px solid #1e2530',
+              background: 'var(--bg-hover)', borderRadius: 7,
+              padding: '7px 10px', border: '1px solid var(--border-subtle)',
             }}>
               <span style={{ fontSize: 13 }}>{r.channel === 'telegram' ? '📱' : '✉️'}</span>
               <div style={{ minWidth: 0 }}>
-                {r.label && <span style={{ fontSize: 12, color: '#c8d8e8' }}>{r.label} · </span>}
-                <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#4a5a6a' }}>
+                {r.label && <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{r.label} · </span>}
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
                   {r.target.length > 28 ? r.target.slice(0, 28) + '…' : r.target}
                 </span>
               </div>
@@ -526,14 +526,14 @@ function SendConfirmPopover({
             display: 'flex', alignItems: 'flex-start', gap: 10,
             padding: '10px 12px', borderRadius: 8, marginBottom: 14,
             background: testMode ? 'rgba(62,207,207,0.06)' : 'rgba(255,255,255,0.02)',
-            border: `1px solid ${testMode ? 'rgba(62,207,207,0.2)' : '#1e2530'}`,
+            border: `1px solid ${testMode ? 'rgba(62,207,207,0.2)' : 'var(--border-subtle)'}`,
             cursor: 'pointer',
           }}>
             <input type="checkbox" checked={testMode} onChange={e => setTestMode(e.target.checked)}
-              style={{ marginTop: 2, accentColor: '#3ecfcf', cursor: 'pointer' }} />
+              style={{ marginTop: 2, accentColor: 'var(--accent)', cursor: 'pointer' }} />
             <div>
-              <p style={{ fontSize: 12, fontWeight: 600, color: '#c8d8e8' }}>Test mode</p>
-              <p style={{ fontSize: 11, color: '#4a5a6a', marginTop: 2 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>Test mode</p>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                 Send only to {testR.label ?? testR.target}
               </p>
             </div>
@@ -544,14 +544,14 @@ function SendConfirmPopover({
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onCancel} style={{
             flex: 1, padding: '9px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-            background: 'transparent', border: '1px solid #1e2530', color: '#6a7a8a', cursor: 'pointer',
+            background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer',
           }}>Cancel</button>
           <button
             onClick={() => onConfirm(testMode && testR ? testR.id : undefined)}
             disabled={sending}
             style={{
               flex: 2, padding: '9px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-              background: '#3ecfcf', color: '#0a0f18', border: 'none',
+              background: 'var(--accent)', color: '#ffffff', border: 'none',
               cursor: sending ? 'not-allowed' : 'pointer', opacity: sending ? 0.7 : 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
@@ -589,12 +589,12 @@ function StatsBar({ briefings, history }: { briefings: BriefingWithRecipients[];
     }}>
       {tiles.map(t => (
         <div key={t.label} style={{
-          background: '#0d1117', border: '1px solid #1e2530', borderRadius: 12, padding: '14px 18px',
+          background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '14px 18px',
         }}>
-          <p style={{ fontSize: 22, fontWeight: 800, color: '#3ecfcf', lineHeight: 1, letterSpacing: '-0.02em' }}>
+          <p style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em' }}>
             {t.value}
           </p>
-          <p style={{ fontSize: 11, color: '#4a5a6a', marginTop: 6, letterSpacing: '0.04em' }}>{t.label}</p>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, letterSpacing: '0.04em' }}>{t.label}</p>
         </div>
       ))}
     </div>
@@ -606,28 +606,28 @@ function StatsBar({ briefings, history }: { briefings: BriefingWithRecipients[];
 function MorningBriefingSetupCard({ onSetup, loading }: { onSetup: () => void; loading: boolean }) {
   return (
     <div style={{
-      background: 'transparent', border: '1px dashed #1e2530', borderRadius: 14,
+      background: 'transparent', border: '1px dashed var(--border-subtle)', borderRadius: 14,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', padding: '32px 20px', gap: 12, minHeight: 220,
     }}>
       <div style={{
         width: 40, height: 40, borderRadius: 10,
-        background: 'rgba(62,207,207,0.06)', border: '1px solid rgba(62,207,207,0.12)',
+        background: 'rgba(var(--accent-rgb),0.06)', border: '1px solid rgba(var(--accent-rgb),0.12)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <Sun size={20} style={{ color: '#3ecfcf' }} />
+        <Sun size={20} style={{ color: 'var(--accent)' }} />
       </div>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: 13, fontWeight: 700, color: '#4a5a6a' }}>Morning Briefing</p>
-        <p style={{ fontSize: 12, color: '#2a3545', marginTop: 4, maxWidth: 200, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>Morning Briefing</p>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 200, lineHeight: 1.5 }}>
           Start the day with an 7 AM ops summary delivered to your team.
         </p>
       </div>
       <button onClick={onSetup} disabled={loading} style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: '8px 16px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-        background: 'rgba(62,207,207,0.08)', color: '#3ecfcf',
-        border: '1px solid rgba(62,207,207,0.2)',
+        background: 'rgba(var(--accent-rgb),0.08)', color: 'var(--accent)',
+        border: '1px solid rgba(var(--accent-rgb),0.2)',
         cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
       }}>
         {loading ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={12} />}
@@ -695,14 +695,14 @@ function BriefingCard({
   return (
     <>
       <div style={{
-        background: '#0d1117',
-        border: `1px solid ${briefing.is_enabled ? 'rgba(62,207,207,0.15)' : '#1e2530'}`,
+        background: 'var(--bg-surface)',
+        border: `1px solid ${briefing.is_enabled ? 'rgba(62,207,207,0.15)' : 'var(--border-subtle)'}`,
         borderRadius: 14, overflow: 'hidden',
         opacity: briefing.is_enabled ? 1 : 0.65,
         display: 'flex', flexDirection: 'column',
       }}>
         {/* Top accent line */}
-        <div style={{ height: 2, background: briefing.is_enabled ? '#3ecfcf' : '#1e2530', flexShrink: 0 }} />
+        <div style={{ height: 2, background: briefing.is_enabled ? 'var(--accent)' : 'var(--border-subtle)', flexShrink: 0 }} />
 
         {/* Always-visible section */}
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -711,20 +711,20 @@ function BriefingCard({
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <p style={{ fontSize: 15, fontWeight: 800, color: '#e6edf3', lineHeight: 1.2 }}>{briefing.name}</p>
+                <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>{briefing.name}</p>
                 <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: freq.bg, color: freq.color }}>
                   {freq.label}
                 </span>
               </div>
               {briefing.description && (
-                <p style={{ fontSize: 12, color: '#4a5a6a', marginTop: 3 }}>{briefing.description}</p>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{briefing.description}</p>
               )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <Toggle checked={briefing.is_enabled} onChange={v => onToggle(briefing.id, v)} />
               <button onClick={() => setExpanded(!expanded)} style={{
-                background: 'none', border: '1px solid #1e2530', cursor: 'pointer',
-                color: '#4a5a6a', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center',
+                background: 'none', border: '1px solid var(--border-subtle)', cursor: 'pointer',
+                color: 'var(--text-muted)', padding: '3px 6px', borderRadius: 6, display: 'flex', alignItems: 'center',
               }}>
                 <ChevronDown size={13} style={{
                   transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
@@ -737,12 +737,12 @@ function BriefingCard({
           {/* Schedule + countdown */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Calendar size={11} style={{ color: '#3ecfcf', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: '#8899a6' }}>{scheduleLabel(briefing)}</span>
+              <Calendar size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{scheduleLabel(briefing)}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Clock size={11} style={{ color: '#3a4555', flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: briefing.is_enabled ? '#4a5a6a' : '#2a3545', fontStyle: briefing.is_enabled ? 'normal' : 'italic' }}>
+              <Clock size={11} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: briefing.is_enabled ? 'normal' : 'italic', opacity: briefing.is_enabled ? 1 : 0.6 }}>
                 {nextSendText}
               </span>
             </div>
@@ -755,13 +755,13 @@ function BriefingCard({
             ).map(t => (
               <span key={t.value} style={{
                 fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                background: 'rgba(255,255,255,0.05)', color: '#6a7a8a', border: '1px solid #1e2530',
+                background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)',
               }}>{t.label}</span>
             ))}
             {briefing.min_severity && briefing.min_severity !== 'low' && (
               <span style={{
                 fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 4,
-                background: 'rgba(227,179,65,0.08)', color: '#e3b341', border: '1px solid rgba(227,179,65,0.15)',
+                background: 'rgba(227,179,65,0.08)', color: 'var(--severity-high)', border: '1px solid rgba(227,179,65,0.15)',
               }}>
                 {SEVERITY_OPTIONS.find(s => s.value === briefing.min_severity)?.label}
               </span>
@@ -770,8 +770,8 @@ function BriefingCard({
 
           {/* Collapsed footer: recipient count + Send Now */}
           {!expanded && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 4, borderTop: '1px solid #0e1420' }}>
-              <span style={{ fontSize: 12, color: '#4a5a6a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 4, borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                 {activeR.length} recipient{activeR.length !== 1 ? 's' : ''}
               </span>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -788,11 +788,11 @@ function BriefingCard({
           maxHeight: expanded ? '800px' : '0px',
           transition: 'max-height 0.2s ease',
         }}>
-          <div style={{ borderTop: '1px solid #0e1420', padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Recipients with delivery rates */}
             <div>
-              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3a4555', marginBottom: 8 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>
                 {activeR.length} recipient{activeR.length !== 1 ? 's' : ''}
               </p>
 
@@ -804,15 +804,15 @@ function BriefingCard({
                       <div style={{
                         width: 22, height: 22, borderRadius: 6, flexShrink: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: r.channel === 'telegram' ? 'rgba(41,182,246,0.1)' : 'rgba(255,255,255,0.05)',
+                        background: r.channel === 'telegram' ? 'rgba(41,182,246,0.1)' : 'var(--bg-elevated)',
                       }}>
                         {r.channel === 'telegram'
                           ? <Send size={11} style={{ color: '#29b6f6' }} />
-                          : <Mail size={11} style={{ color: '#6a7a8a' }} />}
+                          : <Mail size={11} style={{ color: 'var(--text-secondary)' }} />}
                       </div>
-                      <span style={{ fontSize: 12, color: '#8899a6', flex: 1, minWidth: 0 }}>
-                        {r.label && <span style={{ color: '#c8d8e8', marginRight: 5 }}>{r.label}</span>}
-                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#4a5a6a' }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}>
+                        {r.label && <span style={{ color: 'var(--text-primary)', marginRight: 5 }}>{r.label}</span>}
+                        <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-muted)' }}>
                           {r.target.length > 22 ? r.target.slice(0, 22) + '…' : r.target}
                         </span>
                       </span>
@@ -821,7 +821,7 @@ function BriefingCard({
                         {rate.label}
                       </span>
                       <button onClick={() => handleRemove(r.id)} disabled={removingId === r.id}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3a4555', padding: 3, lineHeight: 1, flexShrink: 0 }}>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 3, lineHeight: 1, flexShrink: 0 }}>
                         {removingId === r.id
                           ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
                           : <X size={11} />}
@@ -835,39 +835,39 @@ function BriefingCard({
               {!addOpen ? (
                 <button onClick={() => setAddOpen(true)} style={{
                   marginTop: 8, display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'none', border: '1px dashed #1e2530', borderRadius: 7,
-                  padding: '5px 10px', cursor: 'pointer', color: '#3a4555', fontSize: 12, width: '100%',
+                  background: 'none', border: '1px dashed var(--border-subtle)', borderRadius: 7,
+                  padding: '5px 10px', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, width: '100%',
                 }}>
                   <Plus size={11} /> Add recipient
                 </button>
               ) : (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8,
-                  background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: '10px 12px', border: '1px solid #1e2530' }}>
+                  background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border-subtle)' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {(['telegram', 'email'] as const).map(ch => (
                       <button key={ch} type="button" onClick={() => setAddChannel(ch)} style={{
                         flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
                         cursor: 'pointer', border: '1px solid',
-                        background: addChannel === ch ? 'rgba(62,207,207,0.1)' : 'transparent',
-                        color:      addChannel === ch ? '#3ecfcf' : '#4a5a6a',
-                        borderColor: addChannel === ch ? 'rgba(62,207,207,0.3)' : '#1e2530',
+                        background: addChannel === ch ? 'rgba(var(--accent-rgb),0.1)' : 'transparent',
+                        color:      addChannel === ch ? 'var(--accent)' : 'var(--text-muted)',
+                        borderColor: addChannel === ch ? 'rgba(var(--accent-rgb),0.3)' : 'var(--border-subtle)',
                       }}>{ch === 'telegram' ? 'Telegram' : 'Email'}</button>
                     ))}
                   </div>
                   <input value={addTarget} onChange={e => setAddTarget(e.target.value)}
                     placeholder={addChannel === 'telegram' ? 'Chat ID (-100...)' : 'email@domain.com'}
-                    style={{ background: '#0a0f18', border: '1px solid #1e2530', borderRadius: 6,
-                      color: '#e6edf3', padding: '6px 10px', fontSize: 12, outline: 'none',
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                      color: 'var(--text-primary)', padding: '6px 10px', fontSize: 12, outline: 'none',
                       fontFamily: addChannel === 'telegram' ? 'monospace' : 'inherit' }}
                   />
                   <input value={addLabel} onChange={e => setAddLabel(e.target.value)} placeholder='Label (e.g. "Owner")'
-                    style={{ background: '#0a0f18', border: '1px solid #1e2530', borderRadius: 6,
-                      color: '#e6edf3', padding: '6px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                      color: 'var(--text-primary)', padding: '6px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
                   />
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={handleAdd} disabled={!addTarget.trim() || addLoading} style={{
                       flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                      background: '#3ecfcf', color: '#0a0f18', border: 'none', cursor: 'pointer',
+                      background: 'var(--accent)', color: '#ffffff', border: 'none', cursor: 'pointer',
                       opacity: !addTarget.trim() || addLoading ? 0.5 : 1,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                     }}>
@@ -876,7 +876,7 @@ function BriefingCard({
                     </button>
                     <button onClick={() => { setAddOpen(false); setAddTarget(''); setAddLabel('') }} style={{
                       padding: '6px 14px', borderRadius: 6, fontSize: 12, background: 'transparent',
-                      border: '1px solid #1e2530', color: '#4a5a6a', cursor: 'pointer',
+                      border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer',
                     }}>Cancel</button>
                   </div>
                 </div>
@@ -884,12 +884,12 @@ function BriefingCard({
             </div>
 
             {/* Expanded footer: last sent + Edit/Copy/Delete/Send */}
-            <div style={{ borderTop: '1px solid #0e1420', paddingTop: 12,
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12,
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <p style={{ fontSize: 11, color: '#3a4555' }}>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {lastSent
                   ? <>Last sent {formatDistanceToNow(new Date(lastSent.sent_at), { addSuffix: true })}
-                      <span style={{ color: STATUS_STYLE[lastSent.status]?.color ?? '#4a5a6a', marginLeft: 5 }}>
+                      <span style={{ color: STATUS_STYLE[lastSent.status]?.color ?? 'var(--text-muted)', marginLeft: 5 }}>
                         · {STATUS_STYLE[lastSent.status]?.label}
                       </span>
                     </>
@@ -983,15 +983,15 @@ function BriefingModal({
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: '#0d1117', border: '1px solid #1e2530', borderRadius: 16,
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 16,
         width: '100%', maxWidth: 560, maxHeight: '90vh',
         overflowY: 'auto', display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <p style={{ fontSize: 16, fontWeight: 800, color: '#e6edf3' }}>
+          <p style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>
             {mode === 'new' ? 'New Briefing' : `Edit — ${briefing?.name}`}
           </p>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4a5a6a', padding: 4 }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4 }}>
             <X size={16} />
           </button>
         </div>
@@ -1011,8 +1011,8 @@ function BriefingModal({
           </div>
 
           {/* Schedule */}
-          <div style={{ borderTop: '1px solid #111820', paddingTop: 18 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3ecfcf', marginBottom: 14 }}>Schedule</p>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 14 }}>Schedule</p>
 
             <div style={{ marginBottom: 14 }}>
               <FieldLabel>Frequency</FieldLabel>
@@ -1024,8 +1024,8 @@ function BriefingModal({
                       flex: 1, padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
                       cursor: 'pointer', border: '1px solid',
                       background: active ? s.bg : 'transparent',
-                      color:      active ? s.color : '#4a5a6a',
-                      borderColor: active ? s.color.replace(')', ',0.3)').replace('rgb', 'rgba') : '#1e2530',
+                      color:      active ? s.color : 'var(--text-muted)',
+                      borderColor: active ? s.color.replace(')', ',0.3)').replace('rgb', 'rgba') : 'var(--border-subtle)',
                     }}>{s.label}</button>
                   )
                 })}
@@ -1040,9 +1040,9 @@ function BriefingModal({
                     <button key={d} type="button" onClick={() => set('weekly_day', i)} style={{
                       flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
                       cursor: 'pointer', border: '1px solid',
-                      background: form.weekly_day === i ? 'rgba(179,146,240,0.12)' : 'transparent',
-                      color:      form.weekly_day === i ? '#b392f0' : '#4a5a6a',
-                      borderColor: form.weekly_day === i ? 'rgba(179,146,240,0.3)' : '#1e2530',
+                      background: form.weekly_day === i ? 'var(--kb-purple-dim)' : 'transparent',
+                      color:      form.weekly_day === i ? 'var(--kb-purple)' : 'var(--text-muted)',
+                      borderColor: form.weekly_day === i ? 'rgba(179,146,240,0.3)' : 'var(--border-subtle)',
                     }}>{d}</button>
                   ))}
                 </div>
@@ -1056,8 +1056,8 @@ function BriefingModal({
           </div>
 
           {/* Filters */}
-          <div style={{ borderTop: '1px solid #111820', paddingTop: 18 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3ecfcf', marginBottom: 14 }}>Filters</p>
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 14 }}>Filters</p>
 
             <div style={{ marginBottom: 14 }}>
               <FieldLabel>Topics</FieldLabel>
@@ -1068,9 +1068,9 @@ function BriefingModal({
                     <button key={t.value} type="button" onClick={() => toggleTopic(t.value)} style={{
                       padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                       cursor: 'pointer', border: '1px solid',
-                      background: active ? 'rgba(62,207,207,0.1)' : 'transparent',
-                      color:      active ? '#3ecfcf' : '#4a5a6a',
-                      borderColor: active ? 'rgba(62,207,207,0.3)' : '#1e2530',
+                      background: active ? 'rgba(var(--accent-rgb),0.1)' : 'transparent',
+                      color:      active ? 'var(--accent)' : 'var(--text-muted)',
+                      borderColor: active ? 'rgba(var(--accent-rgb),0.3)' : 'var(--border-subtle)',
                     }}>{t.label}</button>
                   )
                 })}
@@ -1086,9 +1086,9 @@ function BriefingModal({
                     <button key={s.value} type="button" onClick={() => set('min_severity', s.value)} style={{
                       flex: 1, padding: '6px 0', borderRadius: 7, fontSize: 11, fontWeight: 600,
                       cursor: 'pointer', border: '1px solid',
-                      background: active ? 'rgba(62,207,207,0.08)' : 'transparent',
-                      color:      active ? '#3ecfcf' : '#4a5a6a',
-                      borderColor: active ? 'rgba(62,207,207,0.25)' : '#1e2530',
+                      background: active ? 'rgba(var(--accent-rgb),0.08)' : 'transparent',
+                      color:      active ? 'var(--accent)' : 'var(--text-muted)',
+                      borderColor: active ? 'rgba(var(--accent-rgb),0.25)' : 'var(--border-subtle)',
                     }}>{s.label}</button>
                   )
                 })}
@@ -1098,19 +1098,19 @@ function BriefingModal({
 
           {/* Recipients (new mode only) */}
           {mode === 'new' && (
-            <div style={{ borderTop: '1px solid #111820', paddingTop: 18 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3ecfcf', marginBottom: 14 }}>Recipients</p>
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 14 }}>Recipients</p>
 
               {recipients.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
                   {recipients.map((r, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8,
-                      background: 'rgba(255,255,255,0.02)', borderRadius: 7, padding: '7px 10px' }}>
-                      <span style={{ fontSize: 11, color: '#4a5a6a', width: 60 }}>{r.channel}</span>
-                      {r.label && <span style={{ fontSize: 12, color: '#c8d8e8' }}>{r.label}</span>}
-                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#4a5a6a', flex: 1 }}>{r.target}</span>
+                      background: 'var(--bg-elevated)', borderRadius: 7, padding: '7px 10px' }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 60 }}>{r.channel}</span>
+                      {r.label && <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{r.label}</span>}
+                      <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', flex: 1 }}>{r.target}</span>
                       <button onClick={() => setRecipients(rs => rs.filter((_, j) => j !== i))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3a4555' }}>
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                         <X size={11} />
                       </button>
                     </div>
@@ -1119,32 +1119,32 @@ function BriefingModal({
               )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8,
-                background: 'rgba(255,255,255,0.02)', borderRadius: 8, padding: '12px', border: '1px solid #1e2530' }}>
+                background: 'var(--bg-elevated)', borderRadius: 8, padding: '12px', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {(['telegram', 'email'] as const).map(ch => (
                     <button key={ch} type="button" onClick={() => setAddCh(ch)} style={{
                       flex: 1, padding: '5px 0', borderRadius: 6, fontSize: 11, fontWeight: 600,
                       cursor: 'pointer', border: '1px solid',
-                      background: addCh === ch ? 'rgba(62,207,207,0.1)' : 'transparent',
-                      color:      addCh === ch ? '#3ecfcf' : '#4a5a6a',
-                      borderColor: addCh === ch ? 'rgba(62,207,207,0.3)' : '#1e2530',
+                      background: addCh === ch ? 'rgba(var(--accent-rgb),0.1)' : 'transparent',
+                      color:      addCh === ch ? 'var(--accent)' : 'var(--text-muted)',
+                      borderColor: addCh === ch ? 'rgba(var(--accent-rgb),0.3)' : 'var(--border-subtle)',
                     }}>{ch === 'telegram' ? 'Telegram' : 'Email'}</button>
                   ))}
                 </div>
                 <input value={addTgt} onChange={e => setAddTgt(e.target.value)}
                   placeholder={addCh === 'telegram' ? 'Chat ID (-100...)' : 'email@domain.com'}
-                  style={{ background: '#0a0f18', border: '1px solid #1e2530', borderRadius: 6,
-                    color: '#e6edf3', padding: '7px 10px', fontSize: 12, outline: 'none',
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                    color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none',
                     fontFamily: addCh === 'telegram' ? 'monospace' : 'inherit' }}
                 />
                 <input value={addLbl} onChange={e => setAddLbl(e.target.value)} placeholder='Label — "Owner", "Fleet Mgr"…'
-                  style={{ background: '#0a0f18', border: '1px solid #1e2332', borderRadius: 6,
-                    color: '#e6edf3', padding: '7px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
+                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                    color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
                 />
                 <button onClick={addRecipient} disabled={!addTgt.trim()} style={{
                   padding: '7px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-                  background: 'rgba(62,207,207,0.08)', color: '#3ecfcf',
-                  border: '1px solid rgba(62,207,207,0.2)', cursor: 'pointer',
+                  background: 'rgba(var(--accent-rgb),0.08)', color: 'var(--accent)',
+                  border: '1px solid rgba(var(--accent-rgb),0.2)', cursor: 'pointer',
                   opacity: !addTgt.trim() ? 0.4 : 1,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                 }}>
@@ -1159,7 +1159,7 @@ function BriefingModal({
             <button onClick={() => onSave(form, mode === 'new' ? recipients : undefined)} disabled={!form.name.trim() || saving}
               style={{
                 flex: 1, padding: '10px', borderRadius: 9, fontSize: 13, fontWeight: 700,
-                background: '#3ecfcf', color: '#0a0f18', border: 'none', cursor: 'pointer',
+                background: 'var(--accent)', color: '#ffffff', border: 'none', cursor: 'pointer',
                 opacity: !form.name.trim() || saving ? 0.5 : 1,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
               }}>
@@ -1168,7 +1168,7 @@ function BriefingModal({
             </button>
             <button onClick={onClose} style={{
               padding: '10px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600,
-              background: 'transparent', border: '1px solid #1e2530', color: '#6a7a8a', cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)', cursor: 'pointer',
             }}>Cancel</button>
           </div>
         </div>
@@ -1192,30 +1192,30 @@ function HistorySection({
 
   return (
     <>
-      <div style={{ background: '#0d1117', border: '1px solid #1e2530', borderRadius: 14, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #111820',
+      <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 14, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <p style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3' }}>Briefing History</p>
-            <p style={{ fontSize: 11.5, color: '#4a5a6a', marginTop: 2 }}>Last 50 deliveries</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Briefing History</p>
+            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>Last 50 deliveries</p>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
               <select value={filter} onChange={e => setFilter(e.target.value)} style={{
                 appearance: 'none', WebkitAppearance: 'none',
-                background: '#0a0f18', border: '1px solid #1e2530', borderRadius: 8,
-                color: '#8899a6', padding: '6px 28px 6px 10px', fontSize: 12, cursor: 'pointer', outline: 'none',
+                background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 8,
+                color: 'var(--text-secondary)', padding: '6px 28px 6px 10px', fontSize: 12, cursor: 'pointer', outline: 'none',
               }}>
                 <option value="all">All briefings</option>
                 {briefingNames.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
-              <ChevronDown size={11} style={{ position: 'absolute', right: 8, color: '#4a5a6a', pointerEvents: 'none' }} />
+              <ChevronDown size={11} style={{ position: 'absolute', right: 8, color: 'var(--text-muted)', pointerEvents: 'none' }} />
             </div>
             <button onClick={onRefresh} disabled={loading} style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '6px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-              background: 'rgba(255,255,255,0.04)', border: '1px solid #1e2530',
-              color: '#6a7a8a', cursor: loading ? 'not-allowed' : 'pointer',
+              background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)', cursor: loading ? 'not-allowed' : 'pointer',
             }}>
               <RefreshCw size={11} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
               Refresh
@@ -1225,9 +1225,9 @@ function HistorySection({
 
         {filtered.length === 0 ? (
           <div style={{ padding: '52px 20px', textAlign: 'center' }}>
-            <Moon size={28} style={{ color: '#1e2530', margin: '0 auto 12px' }} />
-            <p style={{ fontSize: 13, color: '#4a5a6a' }}>No briefings sent yet.</p>
-            <p style={{ fontSize: 12, color: '#2a3545', marginTop: 4 }}>
+            <Moon size={28} style={{ color: 'var(--border-default)', margin: '0 auto 12px' }} />
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No briefings sent yet.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
               Configure a briefing above and click Send Now to test.
             </p>
           </div>
@@ -1235,11 +1235,11 @@ function HistorySection({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #111820' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   {['Briefing', 'Sent At', 'Status', 'Recipients', 'Preview'].map(h => (
                     <th key={h} style={{ padding: '10px 18px', textAlign: 'left',
                       fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-                      textTransform: 'uppercase', color: '#3a4555', whiteSpace: 'nowrap' }}>{h}</th>
+                      textTransform: 'uppercase', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1249,17 +1249,17 @@ function HistorySection({
                   const hasFullPreview = !!(row.message_full_text ?? row.message_preview)
                   return (
                     <tr key={row.id} style={{
-                      borderBottom: i < filtered.length - 1 ? '1px solid #0e1420' : 'none',
+                      borderBottom: i < filtered.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                       background: i % 2 === 1 ? 'rgba(255,255,255,0.01)' : 'transparent',
                     }}>
                       <td style={{ padding: '11px 18px' }}>
-                        <p style={{ fontSize: 12.5, fontWeight: 600, color: '#c8d8e8' }}>
+                        <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                           {row.briefings?.name ?? '—'}
                         </p>
                       </td>
                       <td style={{ padding: '11px 18px', whiteSpace: 'nowrap' }}>
-                        <p style={{ fontSize: 12, color: '#c8d8e8' }}>{format(ts, 'MMM d, yyyy')}</p>
-                        <p style={{ fontSize: 11, color: '#4a5a6a', marginTop: 2 }}>
+                        <p style={{ fontSize: 12, color: 'var(--text-primary)' }}>{format(ts, 'MMM d, yyyy')}</p>
+                        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                           {format(ts, 'h:mm a')} · {formatDistanceToNow(ts, { addSuffix: true })}
                         </p>
                       </td>
@@ -1276,19 +1276,19 @@ function HistorySection({
                             textAlign: 'left', width: '100%',
                           }}>
                             <p style={{
-                              fontSize: 11.5, color: '#4a5a6a',
+                              fontSize: 11.5, color: 'var(--text-muted)',
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260,
-                              textDecoration: 'underline', textDecorationColor: '#2a3545',
+                              textDecoration: 'underline', textDecorationColor: 'var(--border-default)',
                               transition: 'color 0.15s',
                             }}
-                              onMouseEnter={e => (e.currentTarget.style.color = '#8899a6')}
-                              onMouseLeave={e => (e.currentTarget.style.color = '#4a5a6a')}
+                              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
                             >
                               {row.error_message ?? row.message_preview ?? '—'}
                             </p>
                           </button>
                         ) : (
-                          <p style={{ fontSize: 11.5, color: '#4a5a6a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
+                          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
                             {row.error_message ?? '—'}
                           </p>
                         )}
@@ -1540,16 +1540,16 @@ export function BriefingClient({ initialBriefings, initialHistory }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
             width: 44, height: 44, borderRadius: 12,
-            background: 'rgba(62,207,207,0.08)', border: '1px solid rgba(62,207,207,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3ecfcf',
+            background: 'rgba(var(--accent-rgb),0.08)', border: '1px solid rgba(var(--accent-rgb),0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)',
           }}>
             <Bot size={22} />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#e6edf3', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
               Tori Briefing
             </h1>
-            <p style={{ fontSize: 13, color: '#4a5a6a', marginTop: 3 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>
               Automated intelligence delivered your way
             </p>
           </div>
@@ -1557,7 +1557,7 @@ export function BriefingClient({ initialBriefings, initialHistory }: Props) {
         <button onClick={() => setModal({ mode: 'new' })} style={{
           display: 'inline-flex', alignItems: 'center', gap: 7,
           padding: '9px 18px', borderRadius: 9, fontSize: 13, fontWeight: 700,
-          background: '#3ecfcf', color: '#0a0f18', border: 'none', cursor: 'pointer',
+          background: 'var(--accent)', color: '#ffffff', border: 'none', cursor: 'pointer',
         }}>
           <Plus size={14} /> New Briefing
         </button>
@@ -1569,12 +1569,12 @@ export function BriefingClient({ initialBriefings, initialHistory }: Props) {
       {/* Briefing cards */}
       {briefings.length === 0 && hasMorningBriefing === false ? (
         <div style={{
-          background: '#0d1117', border: '1px dashed #1e2530', borderRadius: 14,
+          background: 'var(--bg-surface)', border: '1px dashed var(--border-subtle)', borderRadius: 14,
           padding: '64px 20px', textAlign: 'center', marginBottom: 32,
         }}>
-          <Sun size={32} style={{ color: '#1e2530', margin: '0 auto 14px' }} />
-          <p style={{ fontSize: 14, color: '#4a5a6a', marginBottom: 6 }}>No briefings configured yet.</p>
-          <p style={{ fontSize: 12, color: '#2a3545' }}>Create your first one with the button above.</p>
+          <Sun size={32} style={{ color: 'var(--border-default)', margin: '0 auto 14px' }} />
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 6 }}>No briefings configured yet.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Create your first one with the button above.</p>
         </div>
       ) : (
         <div style={{
