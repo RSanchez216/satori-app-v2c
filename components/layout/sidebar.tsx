@@ -64,7 +64,7 @@ export function Sidebar() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  const logoSrc = theme === 'light' ? '/logo2.png' : '/logo.png'
+  const logoSrc = theme === 'light' ? '/logo3.jpg' : '/logo.png'
 
   return (
     <aside
