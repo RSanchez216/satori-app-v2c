@@ -5,24 +5,26 @@ export const runtime = 'nodejs'
 
 /**
  * POST /api/sources/dismiss
- * Body: { source_id: string }
+ * Body: { source_id: string } | { source_ids: string[] }
  *
- * Deletes an auto-detected source the user doesn't want to monitor.
+ * Marks auto-detected source(s) as dismissed by setting dismissed_at = now().
+ * Does NOT delete — excluded from notification queries via dismissed_at IS NULL filter.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { source_id } = await req.json()
+    const body = await req.json()
+    const ids: string[] = body.source_ids ?? (body.source_id ? [body.source_id] : [])
 
-    if (!source_id) {
-      return NextResponse.json({ error: 'source_id required' }, { status: 400 })
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'source_id or source_ids required' }, { status: 400 })
     }
 
     const supabase = createAdminClient()
 
     const { error } = await supabase
       .from('sources')
-      .delete()
-      .eq('id', source_id)
+      .update({ dismissed_at: new Date().toISOString() })
+      .in('id', ids)
       .eq('auto_detected', true)   // safety: only dismiss auto-detected ones
 
     if (error) {

@@ -113,10 +113,13 @@ export function Topbar() {
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
+      // Optimistic removal
       setPendingSources((prev) => prev.filter((s) => s.id !== src.id))
       setEditingId(null)
       toast.success(`Now monitoring ${displayName}`)
       router.refresh()
+      // Sync with server after short delay
+      setTimeout(fetchNotifications, 500)
     } catch {
       toast.error('Failed to activate source')
     } finally {
@@ -124,9 +127,11 @@ export function Topbar() {
     }
   }
 
-  // ── Dismiss source (delete record) ──────────────────────────────────────
+  // ── Dismiss source (sets dismissed_at) ──────────────────────────────────
   async function handleDismissSource(id: string) {
     setDismissing(id)
+    // Optimistic removal immediately
+    setPendingSources((prev) => prev.filter((s) => s.id !== id))
     try {
       const res  = await fetch('/api/sources/dismiss', {
         method:  'POST',
@@ -135,9 +140,12 @@ export function Topbar() {
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
-      setPendingSources((prev) => prev.filter((s) => s.id !== id))
+      // Sync with server after short delay
+      setTimeout(fetchNotifications, 500)
     } catch {
       toast.error('Failed to dismiss')
+      // Rollback optimistic update on failure
+      fetchNotifications()
     } finally {
       setDismissing(null)
     }
@@ -153,14 +161,25 @@ export function Topbar() {
     })
   }
 
-  // ── Mark all read (dismiss all alerts) ──────────────────────────────────
+  // ── Mark all read ────────────────────────────────────────────────────────
   function handleMarkAllRead() {
+    // Dismiss all visible alerts via localStorage
     setDismissedIds((prev) => {
       const next = new Set(prev)
       alerts.forEach((a) => next.add(a.id))
       saveDismissed(next)
       return next
     })
+    // Batch-dismiss all pending sources
+    if (pendingSources.length > 0) {
+      const ids = pendingSources.map((s) => s.id)
+      setPendingSources([])
+      fetch('/api/sources/dismiss', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ source_ids: ids }),
+      }).then(() => setTimeout(fetchNotifications, 500)).catch(() => fetchNotifications())
+    }
   }
 
   function startEdit(src: PendingSource) {

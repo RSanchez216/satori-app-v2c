@@ -23,6 +23,7 @@ export interface Source {
   created_at: string
   auto_detected: boolean
   detected_at: string | null
+  dismissed_at: string | null
   telegram_group_name: string | null
   telegram_group_id: number | null
 }

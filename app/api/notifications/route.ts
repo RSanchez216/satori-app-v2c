@@ -19,6 +19,7 @@ export async function GET() {
         .select('id, name, external_id, telegram_group_name, telegram_group_id, detected_at, created_at')
         .eq('is_active', false)
         .eq('auto_detected', true)
+        .is('dismissed_at', null)
         .order('detected_at', { ascending: false }),
 
       supabase
