@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Bell, Settings, User, Send, ChevronRight, Check, X, Sun, Moon } from 'lucide-react'
+import {
+  Bell, Settings, User, Send, ChevronRight, Check, X, Sun, Moon,
+  AlertTriangle, CheckCheck,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
 import { useTheme } from '@/components/theme-provider'
@@ -18,34 +21,72 @@ interface PendingSource {
   created_at: string
 }
 
+interface NotifAlert {
+  id: string
+  title: string
+  severity: 'critical' | 'high'
+  created_at: string
+  source?: { name: string } | null
+}
+
+/* ── localStorage helpers ───────────────────────────────────────────────── */
+const DISMISSED_KEY = 'satori-dismissed-alerts'
+
+function loadDismissed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY)
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function saveDismissed(ids: Set<string>) {
+  try {
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...ids].slice(-500)))
+  } catch {}
+}
+
+/* ── Topbar ─────────────────────────────────────────────────────────────── */
 export function Topbar() {
   const [pendingSources, setPendingSources] = useState<PendingSource[]>([])
-  const [open, setOpen]                     = useState(false)
-  const [editingId, setEditingId]           = useState<string | null>(null)
-  const [editName, setEditName]             = useState('')
-  const [activating, setActivating]         = useState<string | null>(null)
+  const [alerts, setAlerts]               = useState<NotifAlert[]>([])
+  const [dismissedIds, setDismissedIds]   = useState<Set<string>>(new Set())
+  const [open, setOpen]                   = useState(false)
+  const [editingId, setEditingId]         = useState<string | null>(null)
+  const [editName, setEditName]           = useState('')
+  const [activating, setActivating]       = useState<string | null>(null)
+  const [dismissing, setDismissing]       = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router      = useRouter()
   const { theme, toggle } = useTheme()
 
-  // ── Poll for pending sources every 30 s ─────────────────────────
-  const fetchPending = useCallback(async () => {
+  // Load dismissed IDs from localStorage (client only)
+  useEffect(() => { setDismissedIds(loadDismissed()) }, [])
+
+  const visibleAlerts = alerts.filter((a) => !dismissedIds.has(a.id))
+  const badgeCount    = pendingSources.length + visibleAlerts.length
+
+  // ── Fetch notifications ─────────────────────────────────────────────────
+  const fetchNotifications = useCallback(async () => {
     try {
-      const res  = await fetch('/api/sources/pending')
+      const res = await fetch('/api/notifications')
+      if (!res.ok) return
       const data = await res.json()
-      if (data.sources) setPendingSources(data.sources)
+      setPendingSources(data.pendingSources ?? [])
+      setAlerts(data.alerts ?? [])
     } catch {
-      // silent — topbar polling failures should never surface to the user
+      // silent — never surface polling errors to the user
     }
   }, [])
 
   useEffect(() => {
-    fetchPending()
-    const interval = setInterval(fetchPending, 30_000)
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 30_000)
     return () => clearInterval(interval)
-  }, [fetchPending])
+  }, [fetchNotifications])
 
-  // ── Close dropdown on outside click ─────────────────────────────
+  // ── Close on outside click ──────────────────────────────────────────────
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -57,7 +98,7 @@ export function Topbar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  // ── Activate source ──────────────────────────────────────────────
+  // ── Activate source ─────────────────────────────────────────────────────
   async function handleActivate(src: PendingSource) {
     const displayName = editingId === src.id
       ? editName.trim() || src.telegram_group_name || src.name
@@ -72,27 +113,60 @@ export function Topbar() {
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error)
-
       setPendingSources((prev) => prev.filter((s) => s.id !== src.id))
       setEditingId(null)
-      setOpen(pendingSources.length > 1)   // keep open if more pending
       toast.success(`Now monitoring ${displayName}`)
       router.refresh()
-    } catch (err) {
+    } catch {
       toast.error('Failed to activate source')
-      console.error(err)
     } finally {
       setActivating(null)
     }
   }
 
-  // ── Start inline edit ────────────────────────────────────────────
+  // ── Dismiss source (delete record) ──────────────────────────────────────
+  async function handleDismissSource(id: string) {
+    setDismissing(id)
+    try {
+      const res  = await fetch('/api/sources/dismiss', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ source_id: id }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error)
+      setPendingSources((prev) => prev.filter((s) => s.id !== id))
+    } catch {
+      toast.error('Failed to dismiss')
+    } finally {
+      setDismissing(null)
+    }
+  }
+
+  // ── Dismiss alert (localStorage) ────────────────────────────────────────
+  function handleDismissAlert(id: string) {
+    setDismissedIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      saveDismissed(next)
+      return next
+    })
+  }
+
+  // ── Mark all read (dismiss all alerts) ──────────────────────────────────
+  function handleMarkAllRead() {
+    setDismissedIds((prev) => {
+      const next = new Set(prev)
+      alerts.forEach((a) => next.add(a.id))
+      saveDismissed(next)
+      return next
+    })
+  }
+
   function startEdit(src: PendingSource) {
     setEditingId(src.id)
     setEditName(src.telegram_group_name || src.name || '')
   }
-
-  const badgeCount = pendingSources.length
 
   return (
     <header
@@ -119,9 +193,7 @@ export function Topbar() {
         >
           Operations Intelligence
         </span>
-        {/* separator */}
         <div style={{ width: 1, height: 12, background: 'var(--border-subtle)', margin: '0 12px', flexShrink: 0 }} />
-        {/* live pulse */}
         <div className="flex items-center" style={{ gap: 6 }}>
           <div
             className="animate-pulse rounded-full"
@@ -259,46 +331,92 @@ export function Topbar() {
               {/* Header */}
               <div
                 className="flex items-center justify-between"
-                style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-subtle)' }}
+                style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-subtle)' }}
               >
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                  Notifications
-                </span>
-                {badgeCount > 0 && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: 'var(--bell-error)',
-                      background: 'var(--bell-error-bg)',
-                      border: '1px solid var(--bell-error-border)',
-                      borderRadius: 20,
-                      padding: '2px 7px',
-                    }}
-                  >
-                    {badgeCount} pending
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    Notifications
                   </span>
+                  {badgeCount > 0 && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: 'var(--bell-error)',
+                        background: 'var(--bell-error-bg)',
+                        border: '1px solid var(--bell-error-border)',
+                        borderRadius: 20,
+                        padding: '2px 7px',
+                      }}
+                    >
+                      {badgeCount} pending
+                    </span>
+                  )}
+                </div>
+                {(badgeCount > 0 || visibleAlerts.length > 0) && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="flex items-center gap-1"
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: 'var(--text-muted)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '2px 4px',
+                      borderRadius: 4,
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)' }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
+                  >
+                    <CheckCheck size={11} /> Mark all read
+                  </button>
                 )}
               </div>
 
-              {/* Items */}
-              {pendingSources.length === 0 ? (
+              {/* Body */}
+              {pendingSources.length === 0 && visibleAlerts.length === 0 ? (
                 <EmptyNotifications />
               ) : (
-                <div>
-                  {pendingSources.map((src) => (
-                    <NotificationItem
-                      key={src.id}
-                      src={src}
-                      isEditing={editingId === src.id}
-                      editName={editName}
-                      isActivating={activating === src.id}
-                      onStartEdit={() => startEdit(src)}
-                      onEditChange={setEditName}
-                      onActivate={() => handleActivate(src)}
-                      onCancelEdit={() => setEditingId(null)}
-                    />
-                  ))}
+                <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+
+                  {/* ── New Sources section ── */}
+                  {pendingSources.length > 0 && (
+                    <>
+                      <SectionLabel label="New Sources" count={pendingSources.length} />
+                      {pendingSources.map((src) => (
+                        <SourceNotifItem
+                          key={src.id}
+                          src={src}
+                          isEditing={editingId === src.id}
+                          editName={editName}
+                          isActivating={activating === src.id}
+                          isDismissing={dismissing === src.id}
+                          onStartEdit={() => startEdit(src)}
+                          onEditChange={setEditName}
+                          onActivate={() => handleActivate(src)}
+                          onCancelEdit={() => setEditingId(null)}
+                          onDismiss={() => handleDismissSource(src.id)}
+                        />
+                      ))}
+                    </>
+                  )}
+
+                  {/* ── Recent Alerts section ── */}
+                  {visibleAlerts.length > 0 && (
+                    <>
+                      <SectionLabel label="Recent Alerts" count={visibleAlerts.length} />
+                      {visibleAlerts.map((alert) => (
+                        <AlertNotifItem
+                          key={alert.id}
+                          alert={alert}
+                          onDismiss={() => handleDismissAlert(alert.id)}
+                          onClose={() => setOpen(false)}
+                        />
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -314,6 +432,7 @@ export function Topbar() {
                   fontWeight: 600,
                   color: 'var(--accent)',
                   textDecoration: 'none',
+                  display: 'flex',
                 }}
               >
                 View all sources <ChevronRight size={11} />
@@ -346,35 +465,78 @@ export function Topbar() {
   )
 }
 
-/* ─── Notification item ──────────────────────────────────────────────────── */
-function NotificationItem({
+/* ─── Section label ──────────────────────────────────────────────────────── */
+function SectionLabel({ label, count }: { label: string; count: number }) {
+  return (
+    <div
+      style={{
+        padding: '8px 16px 4px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 9.5,
+          fontWeight: 700,
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}
+      >
+        {label}
+      </span>
+      <span
+        style={{
+          fontSize: 9.5,
+          fontWeight: 700,
+          color: 'var(--text-muted)',
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 10,
+          padding: '1px 5px',
+        }}
+      >
+        {count}
+      </span>
+    </div>
+  )
+}
+
+/* ─── Source notification item ───────────────────────────────────────────── */
+function SourceNotifItem({
   src,
   isEditing,
   editName,
   isActivating,
+  isDismissing,
   onStartEdit,
   onEditChange,
   onActivate,
   onCancelEdit,
+  onDismiss,
 }: {
   src: PendingSource
   isEditing: boolean
   editName: string
   isActivating: boolean
+  isDismissing: boolean
   onStartEdit: () => void
   onEditChange: (v: string) => void
   onActivate: () => void
   onCancelEdit: () => void
+  onDismiss: () => void
 }) {
   const displayName = src.telegram_group_name || src.name
-  const timeAgo = src.detected_at
+  const timeAgo     = src.detected_at
     ? formatDistanceToNow(new Date(src.detected_at), { addSuffix: true })
     : 'just now'
 
   return (
     <div
       style={{
-        padding: '12px 16px',
+        padding: '10px 16px',
         borderBottom: '1px solid var(--border-subtle)',
         display: 'flex',
         alignItems: 'flex-start',
@@ -383,12 +545,12 @@ function NotificationItem({
       onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)' }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
     >
-      {/* Telegram icon */}
+      {/* Icon */}
       <div
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 8,
+          width: 28,
+          height: 28,
+          borderRadius: 7,
           background: 'var(--accent-dim)',
           display: 'flex',
           alignItems: 'center',
@@ -397,12 +559,12 @@ function NotificationItem({
           marginTop: 1,
         }}
       >
-        <Send size={13} style={{ color: 'var(--accent)' }} />
+        <Send size={12} style={{ color: 'var(--accent)' }} />
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>
+        <p style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 2 }}>
           New group detected
         </p>
 
@@ -412,12 +574,12 @@ function NotificationItem({
             value={editName}
             onChange={(e) => onEditChange(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') onActivate()
+              if (e.key === 'Enter')  onActivate()
               if (e.key === 'Escape') onCancelEdit()
             }}
             style={{
               width: '100%',
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: 600,
               color: 'var(--text-primary)',
               background: 'var(--accent-dim)',
@@ -431,8 +593,9 @@ function NotificationItem({
         ) : (
           <button
             onClick={onStartEdit}
+            title="Click to rename"
             style={{
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: 700,
               color: 'var(--accent)',
               background: 'none',
@@ -447,17 +610,18 @@ function NotificationItem({
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
-            title="Click to rename"
           >
             {displayName}
           </button>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-            {src.external_id}
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--border-default)' }}>·</span>
+          {src.external_id && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              {src.external_id}
+            </span>
+          )}
+          {src.external_id && <span style={{ fontSize: 10, color: 'var(--border-default)' }}>·</span>}
           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo}</span>
         </div>
       </div>
@@ -507,33 +671,157 @@ function NotificationItem({
             </button>
           </>
         ) : (
-          <button
-            onClick={onActivate}
-            disabled={isActivating}
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--accent)',
-              background: 'var(--accent-dim)',
-              border: '1px solid rgba(var(--accent-rgb), 0.25)',
-              borderRadius: 6,
-              padding: '4px 10px',
-              cursor: 'pointer',
-              opacity: isActivating ? 0.6 : 1,
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(var(--accent-rgb), 0.2)' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-dim)' }}
-          >
-            {isActivating ? 'Activating…' : 'Activate'}
-          </button>
+          <>
+            <button
+              onClick={onActivate}
+              disabled={isActivating}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--accent)',
+                background: 'var(--accent-dim)',
+                border: '1px solid rgba(var(--accent-rgb), 0.25)',
+                borderRadius: 6,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                opacity: isActivating ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(var(--accent-rgb), 0.2)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--accent-dim)' }}
+            >
+              {isActivating ? 'Activating…' : 'Activate'}
+            </button>
+            <button
+              onClick={onDismiss}
+              disabled={isDismissing}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                background: 'transparent',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 6,
+                padding: '4px 10px',
+                cursor: 'pointer',
+                opacity: isDismissing ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--severity-critical)' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
+            >
+              {isDismissing ? '…' : 'Dismiss'}
+            </button>
+          </>
         )}
       </div>
     </div>
   )
 }
 
-/* ─── Empty notifications ────────────────────────────────────────────────── */
+/* ─── Alert notification item ────────────────────────────────────────────── */
+function AlertNotifItem({
+  alert,
+  onDismiss,
+  onClose,
+}: {
+  alert: NotifAlert
+  onDismiss: () => void
+  onClose: () => void
+}) {
+  const isCritical = alert.severity === 'critical'
+  const color      = isCritical ? 'var(--severity-critical)' : 'var(--severity-high)'
+  const bg         = isCritical ? 'rgba(248,81,73,0.08)' : 'rgba(227,179,65,0.08)'
+  const timeAgo    = formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })
+
+  return (
+    <div
+      style={{
+        padding: '10px 16px',
+        borderBottom: '1px solid var(--border-subtle)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--bg-hover)' }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+    >
+      {/* Icon */}
+      <div
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 7,
+          background: bg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          marginTop: 1,
+        }}
+      >
+        <AlertTriangle size={12} style={{ color }} />
+      </div>
+
+      {/* Content — clickable, navigates to /alerts */}
+      <Link
+        href="/alerts"
+        onClick={onClose}
+        style={{ flex: 1, minWidth: 0, textDecoration: 'none' }}
+      >
+        <p style={{ fontSize: 10.5, fontWeight: 600, color, marginBottom: 2, textTransform: 'capitalize' }}>
+          {alert.severity} alert
+        </p>
+        <p
+          style={{
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            marginBottom: 2,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {alert.title}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {alert.source?.name && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{alert.source.name}</span>
+          )}
+          {alert.source?.name && <span style={{ fontSize: 10, color: 'var(--border-default)' }}>·</span>}
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{timeAgo}</span>
+        </div>
+      </Link>
+
+      {/* Dismiss */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDismiss() }}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 5,
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-muted)',
+          flexShrink: 0,
+          marginTop: 1,
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)' }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' }}
+        title="Dismiss"
+      >
+        <X size={11} />
+      </button>
+    </div>
+  )
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────────── */
 function EmptyNotifications() {
   return (
     <div
@@ -546,12 +834,12 @@ function EmptyNotifications() {
         textAlign: 'center',
       }}
     >
-      <Send size={26} style={{ color: 'var(--border-default)' }} />
+      <Bell size={24} style={{ color: 'var(--border-default)' }} />
       <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
-        No new groups detected
+        All caught up
       </p>
-      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 240 }}>
-        Add your bot to a Telegram group and SATORI will detect it automatically
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 230 }}>
+        No new groups or active alerts right now
       </p>
     </div>
   )
