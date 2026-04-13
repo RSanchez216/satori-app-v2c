@@ -90,7 +90,7 @@ async function getDashboardData() {
   ])
 
   // Sort by severity desc, then started_at desc, take top 5
-  const openContexts = ((openContextsRaw ?? []) as (MessageContext & { source?: Source })[])
+  const openContexts = ((openContextsRaw ?? []) as unknown as (MessageContext & { source?: Source })[])
     .sort((a, b) => {
       const sd = (severityOrder[b.severity as string] ?? 0) - (severityOrder[a.severity as string] ?? 0)
       if (sd !== 0) return sd
@@ -131,6 +131,9 @@ async function getDashboardData() {
       resolvedToday: resolvedTodayCount ?? 0,
       healthScore,
       kbViolations,
+      criticalAlerts: criticalCount,
+      highAlerts:     highCount,
+      mediumAlerts:   mediumCount,
     },
     toriBannerMessage,
     openContexts,

@@ -252,4 +252,7 @@ export interface DashboardStats {
   resolvedToday: number
   healthScore: number
   kbViolations: number
+  criticalAlerts: number
+  highAlerts: number
+  mediumAlerts: number
 }

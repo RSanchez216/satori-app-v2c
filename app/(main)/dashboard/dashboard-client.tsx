@@ -78,54 +78,65 @@ function StatCard({
 }
 
 /* ─── Health Ring ───────────────────────────────────────────────────────── */
-function HealthRing({ score }: { score: number }) {
-  const r = 38
+function HealthRing({
+  score,
+  criticalAlerts,
+  highAlerts,
+  mediumAlerts,
+}: {
+  score: number
+  criticalAlerts: number
+  highAlerts: number
+  mediumAlerts: number
+}) {
+  const size = 200
+  const cx   = 100
+  const cy   = 100
+  const r    = 82
+  const sw   = 13                           // stroke width
   const circ = 2 * Math.PI * r
   const offset = circ - (score / 100) * circ
-  const color = score >= 80 ? 'var(--severity-low)' : score >= 60 ? 'var(--severity-high)' : score >= 40 ? 'var(--severity-high)' : 'var(--severity-critical)'
-  const glowHex = score >= 80 ? '#56d364' : score >= 60 ? '#e3b341' : score >= 40 ? '#e3b341' : '#f85149'
-  const label = score >= 80 ? 'Nominal' : score >= 60 ? 'Watch' : score >= 40 ? 'Alert' : 'Critical'
+
+  const color = score >= 90 ? '#16a34a' : score >= 70 ? '#e3b341' : '#f85149'
+  const label = score >= 90 ? 'NOMINAL'  : score >= 70 ? 'CAUTION' : 'CRITICAL'
+  const statusText = score >= 90
+    ? 'Operations nominal'
+    : score >= 70
+    ? 'Attention needed'
+    : 'Critical — review required'
+
+  // Deduction lines
+  const deductions: string[] = []
+  if (criticalAlerts > 0) deductions.push(`−${criticalAlerts * 25} pts · ${criticalAlerts} critical alert${criticalAlerts !== 1 ? 's' : ''}`)
+  if (highAlerts     > 0) deductions.push(`−${highAlerts * 10} pts · ${highAlerts} high alert${highAlerts !== 1 ? 's' : ''}`)
+  if (mediumAlerts   > 0) deductions.push(`−${mediumAlerts * 3} pts · ${mediumAlerts} medium alert${mediumAlerts !== 1 ? 's' : ''}`)
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="relative" style={{ width: 108, height: 108 }}>
-        <svg width="108" height="108" viewBox="0 0 108 108">
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: '100%' }}>
+
+      {/* SVG gauge */}
+      <div style={{ position: 'relative', width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {/* Track */}
-          <circle cx="54" cy="54" r={r} fill="none" stroke="var(--border-subtle)" strokeWidth="7" />
-          {/* Tick marks */}
-          {Array.from({ length: 20 }).map((_, i) => {
-            const angle = (i / 20) * 360 - 90
-            const rad = (angle * Math.PI) / 180
-            const x1 = 54 + (r - 10) * Math.cos(rad)
-            const y1 = 54 + (r - 10) * Math.sin(rad)
-            const x2 = 54 + (r - 7) * Math.cos(rad)
-            const y2 = 54 + (r - 7) * Math.sin(rad)
-            return (
-              <line
-                key={i}
-                x1={x1} y1={y1} x2={x2} y2={y2}
-                stroke="var(--border-subtle)"
-                strokeWidth="1"
-              />
-            )
-          })}
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border-subtle)" strokeWidth={sw} />
           {/* Progress arc */}
           <circle
-            cx="54" cy="54" r={r}
+            cx={cx} cy={cy} r={r}
             fill="none"
             stroke={color}
-            strokeWidth="7"
+            strokeWidth={sw}
             strokeLinecap="round"
             strokeDasharray={circ}
             strokeDashoffset={offset}
-            transform="rotate(-90 54 54)"
-            style={{ transition: 'stroke-dashoffset 1.2s ease-out', filter: `drop-shadow(0 0 6px ${glowHex}88)` }}
+            transform={`rotate(-90 ${cx} ${cy})`}
+            style={{ transition: 'stroke-dashoffset 1.2s ease-out', filter: `drop-shadow(0 0 10px ${color}88)` }}
           />
-          {/* Center score */}
+          {/* Score number */}
           <text
-            x="54" y="49"
+            x={cx} y={cy - 12}
             textAnchor="middle"
-            fontSize="22"
+            dominantBaseline="central"
+            fontSize="48"
             fontWeight="900"
             fill={color}
             fontFamily="inherit"
@@ -133,35 +144,51 @@ function HealthRing({ score }: { score: number }) {
           >
             {score}
           </text>
+          {/* NOMINAL / CAUTION / CRITICAL label */}
           <text
-            x="54" y="63"
+            x={cx} y={cy + 24}
             textAnchor="middle"
-            fontSize="8"
-            fontWeight="600"
+            dominantBaseline="central"
+            fontSize="13"
+            fontWeight="700"
             fill="var(--text-muted)"
             fontFamily="inherit"
-            style={{ letterSpacing: '0.08em', textTransform: 'uppercase' }}
+            style={{ letterSpacing: '0.1em' }}
           >
             {label}
           </text>
         </svg>
-
-        {/* Outer glow ring */}
-        <div
-          className="absolute inset-0 rounded-full pointer-events-none"
-          style={{
-            background: `radial-gradient(circle at center, ${glowHex}08 0%, transparent 65%)`,
-          }}
-        />
       </div>
 
-      <p className="text-xs font-medium text-center" style={{ color: 'var(--text-muted)' }}>
-        {score >= 80
-          ? 'Operations nominal'
-          : score >= 60
-          ? 'Attention needed'
-          : 'Critical — review required'}
+      {/* Status text */}
+      <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
+        {statusText}
       </p>
+
+      {/* Score band legend */}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {[
+          { color: '#16a34a', label: '90–100 Nominal' },
+          { color: '#e3b341', label: '70–89 Caution'  },
+          { color: '#f85149', label: '0–69 Critical'   },
+        ].map((b) => (
+          <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: b.color, display: 'inline-block', flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{b.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Deductions or all-clear */}
+      {deductions.length === 0 ? (
+        <p style={{ fontSize: 12, fontWeight: 600, color: '#16a34a', margin: 0 }}>✓ No open alerts</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+          {deductions.map((d) => (
+            <p key={d} style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500, margin: 0 }}>{d}</p>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -703,7 +730,12 @@ export function DashboardClient(initialData: Props) {
             gap: 0,
           }}
         >
-          <HealthRing score={stats.healthScore} />
+          <HealthRing
+            score={stats.healthScore}
+            criticalAlerts={stats.criticalAlerts}
+            highAlerts={stats.highAlerts}
+            mediumAlerts={stats.mediumAlerts}
+          />
         </div>
 
         {/* Active sources */}
