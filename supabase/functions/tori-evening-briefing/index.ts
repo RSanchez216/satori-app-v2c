@@ -16,10 +16,7 @@ const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY            = Deno.env.get('RESEND_API_KEY') ?? ''
 const FROM_EMAIL                = Deno.env.get('REPORTS_FROM_EMAIL') ?? 'info@satoriknows.com'
-const ELEVENLABS_API_KEY        = Deno.env.get('ELEVENLABS_API_KEY') ?? ''
-
-// Rachel voice — warm, professional
-const ELEVENLABS_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 
@@ -254,24 +251,24 @@ function preprocessForSpeech(text: string): string {
 }
 
 async function textToSpeech(text: string): Promise<{ ok: boolean; audio?: Uint8Array; error?: string }> {
-  if (!ELEVENLABS_API_KEY) return { ok: false, error: 'ELEVENLABS_API_KEY not configured' }
+  if (!OPENAI_API_KEY) return { ok: false, error: 'OPENAI_API_KEY not configured' }
   try {
-    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+    const r = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'content-type': 'application/json',
-        'accept': 'audio/mpeg',
       },
       body: JSON.stringify({
-        text: text.slice(0, 5000),
-        model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        model: 'tts-1',
+        voice: 'nova',          // warm, professional female voice
+        input: text.slice(0, 4096),
+        response_format: 'mp3',
       }),
     })
     if (!r.ok) {
       const msg = await r.text()
-      return { ok: false, error: `ElevenLabs ${r.status}: ${msg.slice(0, 200)}` }
+      return { ok: false, error: `OpenAI TTS ${r.status}: ${msg.slice(0, 200)}` }
     }
     const buf = await r.arrayBuffer()
     return { ok: true, audio: new Uint8Array(buf) }
