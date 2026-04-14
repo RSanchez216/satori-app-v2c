@@ -473,7 +473,8 @@ Deno.serve(async (req: Request) => {
       let voiceSent = false
       const voiceRecipients = recipients.filter(r => r.channel === 'telegram' && r.send_voice !== false)
       if (voiceRecipients.length > 0) {
-        const speechText = preprocessForSpeech(message)
+        const greeting   = `Hi, this is Tori.\n\n`
+        const speechText = greeting + preprocessForSpeech(message)
         const ttsResult  = await textToSpeech(speechText)
         if (ttsResult.ok && ttsResult.audio) {
           for (const r of voiceRecipients) {
