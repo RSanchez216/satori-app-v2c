@@ -13,6 +13,15 @@ export type DeliveryChannel = 'telegram' | 'email' | 'voice'
 export type DeliveryStatus = 'pending' | 'sent' | 'failed'
 export type BuildStatus = 'building' | 'ready' | 'failed'
 
+export interface Department {
+  id: string
+  name: string
+  color: string
+  icon: string
+  display_order: number
+  created_at: string
+}
+
 export interface Source {
   id: string
   name: string
@@ -26,6 +35,7 @@ export interface Source {
   dismissed_at: string | null
   telegram_group_name: string | null
   telegram_group_id: number | null
+  department_id: string | null
 }
 
 export interface Message {
