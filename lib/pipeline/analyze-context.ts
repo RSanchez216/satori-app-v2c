@@ -2,6 +2,27 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ContextAnalysis } from './types'
 
+interface SourceEntry {
+  context_id:  string
+  source_name: string | null
+  reported_at: string
+}
+
+/** Builds a stable daily dedupe key from an alert title, e.g. "engine-breakdown:2026-04-14" */
+function buildDedupeKey(title: string): string {
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 80)
+  // Use Chicago (CT) date so overnight alerts don't split across two keys
+  const date = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Chicago',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()).replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$1-$2') // MM/DD/YYYY → YYYY-MM-DD
+  return `${slug}:${date}`
+}
+
 const SYSTEM_PROMPT = `You are SATORI's intelligence engine — an AI analyst for a trucking operations company.
 
 Your job is to analyze a window of Telegram messages from an operational group chat and extract structured intelligence.
@@ -95,17 +116,64 @@ export async function analyzeContext(
       })
       .eq('id', contextId)
 
-    // If alert-worthy, create an alert
+    // If alert-worthy, upsert the alert (dedup by dedupe_key)
     if (analysis.alert_worthy && analysis.severity) {
-      await supabase.from('alerts').insert({
-        context_id:  contextId,
-        title:       analysis.topic_name ?? analysis.summary.slice(0, 80),
-        description: analysis.summary,
-        severity:    analysis.severity,
-        department:  analysis.department,
-        status:      'open',
-        is_kb_violation: false,
-      })
+      const title     = analysis.topic_name ?? analysis.summary.slice(0, 80)
+      const dedupeKey = buildDedupeKey(title)
+
+      // Fetch source name for sources_json tracking
+      const { data: ctxRow } = await supabase
+        .from('message_contexts')
+        .select('source:sources(name)')
+        .eq('id', contextId)
+        .single()
+      const sourceName = (ctxRow?.source as { name?: string } | null)?.name ?? null
+
+      // Check if an alert with this dedupe_key already exists today
+      const { data: existing } = await supabase
+        .from('alerts')
+        .select('id, mention_count, sources_json, description')
+        .eq('dedupe_key', dedupeKey)
+        .single()
+
+      if (existing) {
+        // Merge: increment mention_count, append source, update description
+        const prevSources = (existing.sources_json as SourceEntry[] | null) ?? []
+        const alreadyListed = prevSources.some((s) => s.context_id === contextId)
+        const newSources: SourceEntry[] = alreadyListed
+          ? prevSources
+          : [...prevSources, { context_id: contextId, source_name: sourceName, reported_at: new Date().toISOString() }]
+
+        await supabase
+          .from('alerts')
+          .update({
+            mention_count: (existing.mention_count ?? 1) + (alreadyListed ? 0 : 1),
+            sources_json:  newSources,
+            description:   newSources.length > 1
+              ? `Reported by ${newSources.length} sources. ${analysis.summary}`
+              : existing.description,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id)
+      } else {
+        // New alert
+        const initialSources: SourceEntry[] = [
+          { context_id: contextId, source_name: sourceName, reported_at: new Date().toISOString() },
+        ]
+        await supabase.from('alerts').insert({
+          context_id:   contextId,
+          title,
+          description:  analysis.summary,
+          severity:     analysis.severity,
+          department:   analysis.department,
+          status:       'open',
+          is_kb_violation: false,
+          dedupe_key:   dedupeKey,
+          mention_count: 1,
+          sources_json: initialSources,
+          updated_at:   new Date().toISOString(),
+        })
+      }
     }
 
     // Log Tori activity

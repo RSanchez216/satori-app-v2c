@@ -142,6 +142,12 @@ export interface KnowledgeBaseEntry {
   updated_at: string
 }
 
+export interface AlertSourceEntry {
+  context_id:  string
+  source_name: string | null
+  reported_at: string
+}
+
 export interface Alert {
   id: string
   context_id: string | null
@@ -155,7 +161,11 @@ export interface Alert {
   department: string | null
   status: AlertStatus
   is_kb_violation: boolean
+  dedupe_key: string | null
+  mention_count: number
+  sources_json: AlertSourceEntry[]
   created_at: string
+  updated_at: string | null
   acknowledged_at: string | null
   resolved_at: string | null
   source?: Source

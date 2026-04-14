@@ -11,7 +11,7 @@ INSERT INTO sources (
   auto_detected,
   created_at
 )
-VALUES (
+SELECT
   'Manas Express Samsara Alerts',
   'samsara',
   'samsara_manas_express',
@@ -20,8 +20,9 @@ VALUES (
   false,
   false,
   now()
-)
-ON CONFLICT (external_id) DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1 FROM sources WHERE external_id = 'samsara_manas_express'
+);
 
 -- Ensure the samsara-media storage bucket exists
 -- (Run this manually in the Supabase dashboard → Storage if the SQL runner doesn't support it)

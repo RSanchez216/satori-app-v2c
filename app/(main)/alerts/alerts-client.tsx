@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Bell, ShieldAlert, CheckCircle2, X, Clock, ExternalLink,
-  Bot, Filter, Loader2,
+  Bot, Filter, Loader2, Radio,
 } from 'lucide-react'
 import { SeverityBadge } from '@/components/ui/severity-badge'
 import { createClient } from '@/lib/supabase/client'
@@ -268,6 +268,19 @@ function AlertCard({
                 style={{ background: 'var(--kb-purple-dim)', color: 'var(--kb-purple)' }}
               >
                 <ShieldAlert size={10} /> KB Violation
+              </span>
+            )}
+            {(alert.mention_count ?? 1) > 1 && (
+              <span
+                className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium"
+                title={
+                  (alert.sources_json ?? []).length > 0
+                    ? `Reported by: ${(alert.sources_json ?? []).map((s) => s.source_name ?? 'Unknown').join(', ')}`
+                    : `Reported by ${alert.mention_count} sources`
+                }
+                style={{ background: 'rgba(62,207,207,0.08)', color: 'var(--accent)', border: '1px solid rgba(62,207,207,0.15)', cursor: 'default' }}
+              >
+                <Radio size={10} /> {alert.mention_count} sources
               </span>
             )}
             {isAcknowledged && (
