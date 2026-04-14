@@ -1,11 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Inbox, MessageSquare, ChevronDown, ChevronUp, AlertTriangle,
-  User, Truck, Package, Eye, Clock, RefreshCw,
+  User, Truck, Package, Eye, Clock, RefreshCw, Loader2,
 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
+import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
+import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Source } from '@/types/database'
 
 type FilterTab = 'all' | 'unread' | 'alert_worthy' | 'needs_review'
@@ -36,10 +39,29 @@ interface Props {
 }
 
 export function InboxClient({ contexts: initial }: Props) {
-  const [contexts, setContexts] = useState<CtxWithSource[]>(initial)
+  const supabase = createClient()
+  const [contexts, setContexts]     = useState<CtxWithSource[]>(initial)
   const [activeTab, setActiveTab]   = useState<FilterTab>('all')
   const [activeDept, setActiveDept] = useState('All Depts')
   const [expanded, setExpanded]     = useState<string | null>(null)
+  const [dateRange, setDateRange]   = useState<DateRange>(() => buildDateRange('today'))
+  const [loading, setLoading]       = useState(false)
+
+  const fetchContexts = useCallback(async (range: DateRange) => {
+    setLoading(true)
+    try {
+      const { data } = await supabase
+        .from('message_contexts')
+        .select('*, source:sources(id, name, type)')
+        .gte('created_at', range.from)
+        .lt('created_at', range.to)
+        .order('created_at', { ascending: false })
+        .limit(200)
+      if (data) setContexts(data as CtxWithSource[])
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase])
 
   const filtered = contexts.filter((ctx) => {
     if (activeTab === 'unread'       && !isUnread(ctx)) return false
@@ -70,15 +92,22 @@ export function InboxClient({ contexts: initial }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>
-            Context Inbox
-          </h1>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1 }}>
+              Context Inbox
+            </h1>
+            {loading && <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />}
+          </div>
+          <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+            AI-analyzed message conversations grouped by context
+          </p>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-          AI-analyzed message conversations grouped by context
-        </p>
+        <DateFilter
+          value={dateRange}
+          onChange={range => { setDateRange(range); fetchContexts(range) }}
+        />
       </div>
 
       {/* Filter bar */}

@@ -12,10 +12,15 @@ function getChicagoMidnightISO(): string {
 
 const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const { searchParams } = new URL(req.url)
+    const fromParam = searchParams.get('from')
+    const toParam   = searchParams.get('to')
+
     const supabase = createAdminClient()
-    const todayMidnight = getChicagoMidnightISO()
+    const from = fromParam ?? getChicagoMidnightISO()
+    const to   = toParam   ?? null   // null = no upper bound (live "today" view)
 
     const [
       { data: openContextsRaw },
@@ -29,31 +34,50 @@ export async function GET() {
       { count: contextsTodayCount },
       { count: activeTopicsCount },
     ] = await Promise.all([
-      supabase
-        .from('message_contexts')
-        .select('id, summary, context_preview, department, severity, source_id, started_at, created_at, ai_status, build_status, source:sources(id, name, type)')
-        .eq('build_status', 'ready')
-        .neq('ai_status', 'failed')
-        .order('created_at', { ascending: false })
-        .limit(20),
+      (() => {
+        let q = supabase
+          .from('message_contexts')
+          .select('id, summary, context_preview, department, severity, source_id, started_at, created_at, ai_status, build_status, source:sources(id, name, type)')
+          .eq('build_status', 'ready')
+          .neq('ai_status', 'failed')
+          .gte('created_at', from)
+          .order('created_at', { ascending: false })
+          .limit(20)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
-      supabase
-        .from('message_contexts')
-        .select('id', { count: 'exact', head: true })
-        .eq('ai_status', 'resolved' as string)
-        .gte('updated_at', todayMidnight),
+      (() => {
+        let q = supabase
+          .from('message_contexts')
+          .select('id', { count: 'exact', head: true })
+          .eq('ai_status', 'resolved' as string)
+          .gte('updated_at', from)
+        if (to) q = q.lt('updated_at', to)
+        return q
+      })(),
 
-      supabase
-        .from('alerts')
-        .select('id, severity, is_kb_violation')
-        .eq('status', 'open'),
+      (() => {
+        let q = supabase
+          .from('alerts')
+          .select('id, severity, is_kb_violation')
+          .eq('status', 'open')
+          .gte('created_at', from)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
-      supabase
-        .from('alerts')
-        .select('*, source:sources(id, name, type)')
-        .eq('status', 'open')
-        .order('created_at', { ascending: false })
-        .limit(5),
+      (() => {
+        let q = supabase
+          .from('alerts')
+          .select('*, source:sources(id, name, type)')
+          .eq('status', 'open')
+          .gte('created_at', from)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
       supabase
         .from('sources')
@@ -71,15 +95,23 @@ export async function GET() {
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true),
 
-      supabase
-        .from('messages')
-        .select('source_id')
-        .gte('created_at', todayMidnight),
+      (() => {
+        let q = supabase
+          .from('messages')
+          .select('source_id')
+          .gte('created_at', from)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
-      supabase
-        .from('message_contexts')
-        .select('id', { count: 'exact', head: true })
-        .gte('created_at', todayMidnight),
+      (() => {
+        let q = supabase
+          .from('message_contexts')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', from)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
       supabase
         .from('ai_topics')

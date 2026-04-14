@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Bell, ShieldAlert, CheckCircle2, X, Clock, ExternalLink,
-  Bot, Filter,
+  Bot, Filter, Loader2,
 } from 'lucide-react'
 import { SeverityBadge } from '@/components/ui/severity-badge'
 import { createClient } from '@/lib/supabase/client'
+import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
+import type { DateRange } from '@/components/ui/date-filter'
 import type { Alert, Source, KnowledgeBaseEntry, AlertSeverity, AlertStatus } from '@/types/database'
 
 type FilterSeverity = AlertSeverity | 'all'
@@ -21,10 +23,29 @@ interface Props {
 }
 
 export function AlertsClient({ initialAlerts }: Props) {
-  const [alerts, setAlerts] = useState(initialAlerts)
+  const supabase = createClient()
+  const [alerts, setAlerts]           = useState(initialAlerts)
   const [filterSeverity, setFilterSeverity] = useState<FilterSeverity>('all')
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('active')
-  const [filterDept, setFilterDept] = useState('All Depts')
+  const [filterStatus, setFilterStatus]     = useState<FilterStatus>('active')
+  const [filterDept, setFilterDept]         = useState('All Depts')
+  const [dateRange, setDateRange]           = useState<DateRange>(() => buildDateRange('today'))
+  const [loading, setLoading]               = useState(false)
+
+  const fetchAlerts = useCallback(async (range: DateRange) => {
+    setLoading(true)
+    try {
+      const { data } = await supabase
+        .from('alerts')
+        .select('*, source:sources(id, name, type), knowledge_base_entry:knowledge_base_entries(id, title)')
+        .gte('created_at', range.from)
+        .lt('created_at', range.to)
+        .order('created_at', { ascending: false })
+        .limit(500)
+      if (data) setAlerts(data as typeof initialAlerts)
+    } finally {
+      setLoading(false)
+    }
+  }, [supabase])
 
   const filtered = alerts
     .filter((a) => {
@@ -74,26 +95,36 @@ export function AlertsClient({ initialAlerts }: Props) {
             Severity-ranked operational alerts from all sources
           </p>
         </div>
-        {/* Summary pills */}
-        <div className="flex items-center gap-2">
-          {counts.critical > 0 && (
-            <span
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
-              style={{ background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', border: '1px solid rgba(248,81,73,0.2)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--severity-critical)' }} />
-              {counts.critical} Critical
-            </span>
-          )}
-          {counts.kbViolations > 0 && (
-            <span
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
-              style={{ background: 'var(--kb-purple-dim)', color: 'var(--kb-purple)', border: '1px solid rgba(179,146,240,0.2)' }}
-            >
-              <ShieldAlert size={11} />
-              {counts.kbViolations} KB Violation{counts.kbViolations !== 1 ? 's' : ''}
-            </span>
-          )}
+        <div className="flex flex-col items-end gap-2">
+          {/* Summary pills */}
+          <div className="flex items-center gap-2">
+            {counts.critical > 0 && (
+              <span
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
+                style={{ background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', border: '1px solid rgba(248,81,73,0.2)' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--severity-critical)' }} />
+                {counts.critical} Critical
+              </span>
+            )}
+            {counts.kbViolations > 0 && (
+              <span
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium"
+                style={{ background: 'var(--kb-purple-dim)', color: 'var(--kb-purple)', border: '1px solid rgba(179,146,240,0.2)' }}
+              >
+                <ShieldAlert size={11} />
+                {counts.kbViolations} KB Violation{counts.kbViolations !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          {/* Date filter */}
+          <div className="flex items-center gap-2">
+            {loading && <Loader2 size={14} style={{ color: 'var(--text-muted)', animation: 'spin 1s linear infinite' }} />}
+            <DateFilter
+              value={dateRange}
+              onChange={range => { setDateRange(range); fetchAlerts(range) }}
+            />
+          </div>
         </div>
       </div>
 

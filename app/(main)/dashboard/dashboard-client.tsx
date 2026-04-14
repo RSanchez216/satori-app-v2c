@@ -8,6 +8,8 @@ import {
   Activity, ShieldCheck, Brain, Bot, ChevronRight, Zap, RefreshCw,
 } from 'lucide-react'
 import { SeverityBadge } from '@/components/ui/severity-badge'
+import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
+import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
 
 interface Props {
@@ -221,14 +223,18 @@ const sourceTypeColor: Record<string, string> = {
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export function DashboardClient(initialData: Props) {
   const [data, setData] = useState<Props>(initialData)
+  const [dateRange, setDateRange] = useState<DateRange>(() => buildDateRange('today'))
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [secondsAgo, setSecondsAgo] = useState(0)
 
-  const refresh = useCallback(async () => {
+  const isToday = dateRange.preset === 'today'
+
+  const fetchStats = useCallback(async (range: DateRange) => {
     setRefreshing(true)
     try {
-      const res = await fetch('/api/dashboard/stats')
+      const url = `/api/dashboard/stats?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
+      const res = await fetch(url)
       if (res.ok) {
         const json = await res.json()
         setData(json)
@@ -245,11 +251,15 @@ export function DashboardClient(initialData: Props) {
   // Set initial lastUpdated client-side only (avoids hydration mismatch)
   useEffect(() => { setLastUpdated(new Date()) }, [])
 
-  // Auto-refresh every 60 seconds
+  // Auto-refresh every 60 seconds — only when viewing today
   useEffect(() => {
-    const interval = setInterval(refresh, 60_000)
+    if (!isToday) return
+    const interval = setInterval(() => fetchStats(dateRange), 60_000)
     return () => clearInterval(interval)
-  }, [refresh])
+  }, [isToday, dateRange, fetchStats])
+
+  // Re-fetch when date range changes
+  useEffect(() => { fetchStats(dateRange) }, [dateRange, fetchStats])
 
   // Tick the "X seconds ago" counter
   useEffect(() => {
@@ -258,6 +268,10 @@ export function DashboardClient(initialData: Props) {
     }, 1000)
     return () => clearInterval(tick)
   }, [lastUpdated])
+
+  function handleDateChange(range: DateRange) {
+    setDateRange(range)
+  }
 
   const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus } = data
   const today = format(new Date(), 'EEEE, MMMM d')
@@ -290,15 +304,17 @@ export function DashboardClient(initialData: Props) {
           </p>
         </div>
 
-        {/* Refresh controls */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {lastUpdated && (
+        {/* Date filter + refresh controls */}
+        <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
+          <DateFilter value={dateRange} onChange={handleDateChange} />
+          <div className="flex items-center gap-2">
+          {lastUpdated && isToday && (
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>
               Updated {secondsAgo < 60 ? `${secondsAgo}s ago` : formatDistanceToNow(lastUpdated, { addSuffix: true })}
             </span>
           )}
           <button
-            onClick={refresh}
+            onClick={() => fetchStats(dateRange)}
             disabled={refreshing}
             className="flex items-center justify-center rounded-lg transition-colors"
             style={{
@@ -315,6 +331,7 @@ export function DashboardClient(initialData: Props) {
           >
             <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
           </button>
+          </div>
         </div>
       </div>
 
