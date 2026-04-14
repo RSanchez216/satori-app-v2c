@@ -11,20 +11,12 @@
  *   4. Rate-limit to 1 message/sec to avoid overloading the API
  */
 
+import 'dotenv/config'
 import { TelegramClient } from 'telegram'
 import { StringSession } from 'telegram/sessions/index.js'
 import { NewMessage, NewMessageEvent } from 'telegram/events/index.js'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { parseAlert, formatAlertText } from './parser.js'
-
-// ── Env ──────────────────────────────────────────────────────────────────────
-const API_ID       = parseInt(process.env.TG_API_ID ?? '', 10)
-const API_HASH     = process.env.TG_API_HASH ?? ''
-const SESSION_STR  = process.env.TG_SESSION_STRING ?? ''
-const SUPABASE_URL = process.env.SUPABASE_URL ?? ''
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-const SATORI_URL   = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-const INGEST_SECRET = process.env.SAMSARA_INGEST_SECRET ?? ''
 
 // ── Target group ─────────────────────────────────────────────────────────────
 const TARGET_GROUP_NAMES = [
@@ -32,9 +24,6 @@ const TARGET_GROUP_NAMES = [
   'samsara alerts',
 ]
 const SAFETYMONITOR_BOT_NAME = 'safetymonitor'
-
-// ── Clients ───────────────────────────────────────────────────────────────────
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // ── Rate-limit queue (1 req/sec) ─────────────────────────────────────────────
 type QueueItem = () => Promise<void>
@@ -65,6 +54,7 @@ function sleep(ms: number) {
 
 async function downloadMedia(
   client: TelegramClient,
+  supabase: SupabaseClient,
   message: NewMessageEvent['message'],
   messageId: string,
 ): Promise<string | null> {
@@ -76,11 +66,12 @@ async function downloadMedia(
 
     // Detect extension from media type
     let ext = 'bin'
-    const mediaType = (message.media as Record<string, unknown>)?.className as string | undefined
+    const media = message.media as unknown as Record<string, unknown>
+    const mediaType = media?.className as string | undefined
     if (mediaType === 'MessageMediaPhoto') ext = 'jpg'
     if (mediaType === 'MessageMediaDocument') {
-      const mime = ((message.media as Record<string, unknown>)?.document as Record<string, unknown> | undefined)
-        ?.mimeType as string | undefined
+      const doc = media?.document as Record<string, unknown> | undefined
+      const mime = doc?.mimeType as string | undefined
       if (mime?.includes('video')) ext = 'mp4'
       else if (mime?.includes('image')) ext = 'jpg'
     }
@@ -111,18 +102,22 @@ async function downloadMedia(
 
 // ── Ingest POST ───────────────────────────────────────────────────────────────
 
-async function postToSatori(payload: {
-  telegram_message_id: string
-  sender_name: string
-  message_text: string
-  message_ts: string
-  media_url?: string
-  alert_type?: string
-  parsed?: Record<string, unknown>
-}) {
-  const url = `${SATORI_URL}/api/samsara/ingest`
+async function postToSatori(
+  satoriUrl: string,
+  ingestSecret: string,
+  payload: {
+    telegram_message_id: string
+    sender_name: string
+    message_text: string
+    message_ts: string
+    media_url?: string
+    alert_type?: string
+    parsed?: Record<string, unknown>
+  }
+) {
+  const url = `${satoriUrl}/api/samsara/ingest`
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (INGEST_SECRET) headers['x-samsara-secret'] = INGEST_SECRET
+  if (ingestSecret) headers['x-samsara-secret'] = ingestSecret
 
   const res = await fetch(url, {
     method: 'POST',
@@ -140,51 +135,52 @@ async function postToSatori(payload: {
   return data
 }
 
-// ── Message handler ───────────────────────────────────────────────────────────
+// ── Message handler factory ───────────────────────────────────────────────────
 
-function makeHandler(client: TelegramClient) {
+function makeHandler(
+  client: TelegramClient,
+  supabase: SupabaseClient,
+  satoriUrl: string,
+  ingestSecret: string,
+) {
   return function handler(event: NewMessageEvent) {
     const msg = event.message
 
-    // Only process messages with text or caption
     const rawText = msg.text ?? msg.message ?? ''
     if (!rawText.trim() && !msg.media) return
 
     enqueue(async () => {
-      // Sender check: we only want messages from bots named SafetyMonitor
+      // Verify sender is SafetyMonitor bot
       let senderName = 'SafetyMonitor'
       try {
         const sender = await msg.getSender()
         if (!sender) return
-        const senderRecord = sender as Record<string, unknown>
-        const firstName = (senderRecord.firstName ?? senderRecord.username ?? '') as string
-        const isBot     = (senderRecord.bot ?? false) as boolean
+        const s = sender as unknown as Record<string, unknown>
+        const firstName = ((s.firstName ?? s.username ?? '') as string)
+        const isBot     = (s.bot ?? false) as boolean
 
         if (!isBot && !firstName.toLowerCase().includes(SAFETYMONITOR_BOT_NAME)) {
-          // Not a bot with SafetyMonitor in the name — skip
-          return
+          return // not SafetyMonitor — skip
         }
         senderName = firstName || 'SafetyMonitor'
       } catch {
-        // Couldn't resolve sender — proceed anyway since group filter already applied
+        // Can't resolve sender — proceed anyway (group filter already scoped it)
       }
 
       const messageId = String(msg.id)
       const messageTs = new Date((msg.date ?? 0) * 1000).toISOString()
 
-      // Download media if present
       const mediaUrl = msg.media
-        ? await downloadMedia(client, msg, messageId)
+        ? await downloadMedia(client, supabase, msg, messageId)
         : null
 
-      // Parse the alert
-      const text   = rawText || `[media alert]`
+      const text   = rawText || '[media alert]'
       const parsed = parseAlert(text)
       const formattedText = formatAlertText(parsed)
 
       console.log(`[listener] msg=${messageId} type=${parsed.alert_type} media=${!!mediaUrl}`)
 
-      await postToSatori({
+      await postToSatori(satoriUrl, ingestSecret, {
         telegram_message_id: messageId,
         sender_name:         senderName,
         message_text:        formattedText,
@@ -212,6 +208,14 @@ function makeHandler(client: TelegramClient) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const API_ID        = parseInt(process.env.TG_API_ID ?? '', 10)
+  const API_HASH      = process.env.TG_API_HASH ?? ''
+  const SESSION_STR   = process.env.TG_SESSION_STRING ?? ''
+  const SUPABASE_URL  = process.env.SUPABASE_URL ?? ''
+  const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+  const SATORI_URL    = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const INGEST_SECRET = process.env.SAMSARA_INGEST_SECRET ?? ''
+
   if (!API_ID || !API_HASH || !SESSION_STR) {
     console.error(
       '[fatal] Missing TG_API_ID, TG_API_HASH, or TG_SESSION_STRING.\n' +
@@ -225,10 +229,7 @@ async function main() {
     process.exit(1)
   }
 
-  if (!SATORI_URL) {
-    console.error('[fatal] Missing NEXT_PUBLIC_APP_URL')
-    process.exit(1)
-  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
   console.log('[startup] Connecting to Telegram…')
   const session = new StringSession(SESSION_STR)
@@ -236,19 +237,27 @@ async function main() {
     connectionRetries: 10,
   })
 
-  await client.connect()
-  console.log('[startup] Connected.')
+  // client.start() properly authenticates the stored session (vs connect() which
+  // is low-level and causes Telegram to immediately drop unauthenticated connections)
+  await client.start({
+    phoneNumber:  async () => process.env.TG_PHONE_NUMBER ?? '',
+    phoneCode:    async () => { throw new Error('Interactive auth not supported in production — run generate-session.ts first') },
+    password:     async () => { throw new Error('Interactive auth not supported in production — run generate-session.ts first') },
+    onError:      (err) => console.error('[auth error]', err),
+  })
+  console.log('[startup] Authenticated and connected.')
 
-  // Resolve the target group
-  let targetPeerId: bigint | null = null
+  // Resolve the target group entity to scope the event handler
+  let targetPeer: string | number | null = null
   try {
     const dialogs = await client.getDialogs({ limit: 200 })
     for (const dialog of dialogs) {
       const title = (dialog.title ?? '').toLowerCase()
       if (TARGET_GROUP_NAMES.some((n) => title.includes(n))) {
-        const entity = dialog.entity as Record<string, unknown> | undefined
-        targetPeerId = entity?.id as bigint ?? null
-        console.log(`[startup] Found target group: "${dialog.title}" (id=${targetPeerId})`)
+        const entity = dialog.entity as unknown as Record<string, unknown> | undefined
+        // Use numeric string id which GramJS accepts as EntityLike
+        targetPeer = entity?.id != null ? Number(entity.id) : null
+        console.log(`[startup] Found target group: "${dialog.title}" (id=${targetPeer})`)
         break
       }
     }
@@ -256,30 +265,26 @@ async function main() {
     console.error('[startup] Failed to list dialogs:', e)
   }
 
-  if (!targetPeerId) {
-    console.warn('[startup] Target group not found in dialogs — listening on ALL chats (messages from SafetyMonitor only)')
+  if (!targetPeer) {
+    console.warn('[startup] Target group not found in dialogs — listening on ALL chats (SafetyMonitor messages only)')
   }
 
   // Register event handler
   client.addEventHandler(
-    makeHandler(client),
-    new NewMessage(
-      targetPeerId
-        ? { chats: [targetPeerId] }
-        : {}
-    )
+    makeHandler(client, supabase, SATORI_URL, INGEST_SECRET),
+    new NewMessage(targetPeer ? { chats: [targetPeer] } : undefined)
   )
 
   console.log(
-    targetPeerId
+    targetPeer
       ? `[listener] Monitoring "Manas Express Samsara Alerts" — waiting for messages…`
       : `[listener] Monitoring ALL chats for SafetyMonitor messages…`
   )
 
-  // Keep alive
-  await client.run({} as Parameters<typeof client.run>[0], async () => {
-    console.log('[listener] Client exiting unexpectedly — reconnecting…')
-  })
+  // Keep the process alive indefinitely
+  process.on('SIGINT',  () => { console.log('\n[shutdown] SIGINT received');  client.disconnect().then(() => process.exit(0)) })
+  process.on('SIGTERM', () => { console.log('\n[shutdown] SIGTERM received'); client.disconnect().then(() => process.exit(0)) })
+  await new Promise<void>(() => { /* runs forever until SIGINT/SIGTERM */ })
 }
 
 main().catch((e) => {
