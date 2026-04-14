@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { formatDistanceToNow, formatDuration, intervalToDuration } from 'date-fns'
+import { formatDistanceToNow, intervalToDuration } from 'date-fns'
 import {
   MessageSquare, Clock, Bot, Eye, ArrowUpRight,
   CheckCircle2, Building2,
@@ -16,10 +16,12 @@ export interface SituationData {
   title: string
   department: string | null
   severity_peak: AlertSeverity | null
-  status: 'open' | 'resolved' | 'escalated' | 'unresolved'
+  status: 'open' | 'resolved' | 'escalated' | 'unresolved' | 'pending'
   started_at: string | null
   resolved_at: string | null
+  /** Legacy field — same as summary */
   synthesis_text: string | null
+  summary?: string | null
   message_count: number
   kb_flagged: boolean
   kb_outcome_met: boolean | null
@@ -29,6 +31,14 @@ export interface SituationData {
   /** 0=Detected, 1=Tori Alerted, 2=Escalated, 3=Response, 4=Resolved */
   active_step?: number
   source_name?: string | null
+  // Fields from context_inbox
+  primary_sender?: string | null
+  recommended_action?: string | null
+  rationale?: string | null
+  entities?: Record<string, unknown> | null
+  context_text?: string | null
+  context_preview?: string | null
+  alert_worthy?: boolean
 }
 
 const BORDER_COLOR: Record<string, string> = {
@@ -69,10 +79,11 @@ function durationText(startedAt: string | null, resolvedAt: string | null): stri
 
 interface Props {
   situation: SituationData
-  onEscalate?: (id: string) => void
+  onEscalate?:    (id: string) => void
+  onViewThread?:  (situation: SituationData) => void
 }
 
-export function SituationCard({ situation: s, onEscalate }: Props) {
+export function SituationCard({ situation: s, onEscalate, onViewThread }: Props) {
   const style = cardStyle(s)
   const isResolved = s.status === 'resolved'
   const activeStep = s.active_step ?? (isResolved ? 4 : s.kb_flagged ? 2 : 1)
@@ -196,20 +207,22 @@ export function SituationCard({ situation: s, onEscalate }: Props) {
           {/* Right: action buttons */}
           <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
             {isResolved ? (
-              <Link href={`/situations/${s.id}`}>
-                <button className="btn-ghost text-[12px] py-1.5 px-3">
-                  <Eye size={12} />
-                  View Details
-                </button>
-              </Link>
+              <button
+                className="btn-ghost text-[12px] py-1.5 px-3"
+                onClick={() => onViewThread?.(s)}
+              >
+                <Eye size={12} />
+                View Details
+              </button>
             ) : (
               <>
-                <Link href={`/situations/${s.id}`}>
-                  <button className="btn-ghost text-[12px] py-1.5 px-3">
-                    <Eye size={12} />
-                    View Thread
-                  </button>
-                </Link>
+                <button
+                  className="btn-ghost text-[12px] py-1.5 px-3"
+                  onClick={() => onViewThread?.(s)}
+                >
+                  <Eye size={12} />
+                  View Thread
+                </button>
                 {s.kb_flagged ? (
                   <button
                     className="btn-purple text-[12px] py-1.5 px-3"

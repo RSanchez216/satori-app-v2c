@@ -1,77 +1,137 @@
 import { createClient } from '@/lib/supabase/server'
 import { SituationsClient } from './situations-client'
-import { MOCK_SITUATIONS } from './situations-data'
 import type { SituationData } from '@/components/situations/SituationCard'
 import type { AlertSeverity } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
-/** Map a raw topic_thread DB row to the SituationData shape */
-function mapThread(row: Record<string, unknown>, kbMap: Map<string, { title: string; expected_outcome: string | null }>): SituationData {
-  const kbEntry = row.knowledge_base_entry_id
-    ? kbMap.get(row.knowledge_base_entry_id as string)
-    : null
+const SEV_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
 
-  const status = (row.status as string) as SituationData['status']
-  const severity = row.severity_peak as AlertSeverity | null
+function deriveStatus(aiStatus: string, alertWorthy: boolean): 'open' | 'resolved' | 'pending' {
+  if (aiStatus === 'resolved') return 'resolved'
+  if (alertWorthy) return 'open'
+  return 'pending'
+}
 
-  // Derive active_step from status
-  let active_step = 0
-  if (status === 'open')       active_step = (row.kb_flagged ? 2 : 1)
-  if (status === 'escalated')  active_step = 2
-  if (status === 'unresolved') active_step = 3
-  if (status === 'resolved')   active_step = 4
-
-  return {
-    id:               (row.id as string),
-    title:            (row.title as string),
-    department:       (row.department as string | null),
-    severity_peak:    severity,
-    status,
-    started_at:       (row.started_at as string | null),
-    resolved_at:      (row.resolved_at as string | null),
-    synthesis_text:   (row.synthesis_text as string | null),
-    message_count:    (row.message_count as number) ?? 0,
-    kb_flagged:       !!(row.kb_flagged),
-    kb_outcome_met:   (row.kb_outcome_met as boolean | null),
-    kb_rule_name:     kbEntry?.title ?? null,
-    kb_expected_outcome: kbEntry?.expected_outcome ?? null,
-    active_step,
-    source_name: (row as Record<string, unknown> & { source?: { name?: string } }).source?.name ?? null,
-  }
+function deriveActiveStep(aiStatus: string, alertWorthy: boolean, kbFlagged: boolean): number {
+  if (aiStatus === 'resolved') return 4
+  if (kbFlagged) return 2
+  if (alertWorthy) return 1
+  return 0
 }
 
 export default async function SituationsPage() {
   const supabase = createClient()
 
-  const { data: threads } = await supabase
-    .from('topic_threads')
-    .select('*, source:sources(id, name)')
-    .order('created_at', { ascending: false })
-    .limit(200)
+  const [
+    { data: contexts },
+    { count: activeSourceCount },
+  ] = await Promise.all([
+    supabase
+      .from('message_contexts')
+      .select(`
+        id, source_id, started_at, ended_at, message_count, primary_sender,
+        context_preview, context_text, build_status, ai_status,
+        summary, department, severity, topic_id, topic_name,
+        needs_review, alert_worthy, recommended_action, rationale,
+        entities_json, analyzed_at, created_at, updated_at,
+        source:sources(id, name, type)
+      `)
+      .eq('build_status', 'ready')
+      .neq('ai_status', 'failed')
+      .order('created_at', { ascending: false })
+      .limit(500),
 
-  // Fetch KB entries for flagged threads
-  const kbIds = (threads ?? [])
-    .map((t) => t.knowledge_base_entry_id)
-    .filter(Boolean) as string[]
+    supabase
+      .from('sources')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true),
+  ])
 
-  const kbMap = new Map<string, { title: string; expected_outcome: string | null }>()
-  if (kbIds.length > 0) {
-    const { data: kbEntries } = await supabase
-      .from('knowledge_base_entries')
-      .select('id, title, expected_outcome')
-      .in('id', kbIds)
+  const valid = (contexts ?? []).filter((c) =>
+    ['done', 'resolved', 'pending'].includes(c.ai_status as string)
+  )
 
-    for (const entry of kbEntries ?? []) {
-      kbMap.set(entry.id, { title: entry.title, expected_outcome: entry.expected_outcome })
-    }
+  // Fetch KB violation alerts for these contexts
+  const contextIds = valid.map((c) => c.id)
+  let kbAlerts: Array<{
+    context_id: string
+    knowledge_base_entry: { id: string; title: string; expected_outcome: string | null } | null
+  }> = []
+
+  if (contextIds.length > 0) {
+    const { data } = await supabase
+      .from('alerts')
+      .select('context_id, knowledge_base_entry:knowledge_base_entries(id, title, expected_outcome)')
+      .in('context_id', contextIds)
+      .eq('is_kb_violation', true)
+    // Supabase returns the FK join as an array; normalise to single object
+    kbAlerts = ((data ?? []) as unknown[]).map((row) => {
+      const r = row as Record<string, unknown>
+      const kbe = Array.isArray(r.knowledge_base_entry)
+        ? (r.knowledge_base_entry[0] ?? null)
+        : (r.knowledge_base_entry ?? null)
+      return { context_id: r.context_id as string, knowledge_base_entry: kbe as typeof kbAlerts[number]['knowledge_base_entry'] }
+    })
   }
 
-  const hasRealData = (threads?.length ?? 0) > 0
+  const kbMap = new Map<string, typeof kbAlerts[number]>()
+  for (const a of kbAlerts) {
+    if (a.context_id && !kbMap.has(a.context_id)) kbMap.set(a.context_id, a)
+  }
 
-  const situations: SituationData[] = hasRealData
-    ? (threads ?? []).map((t) => mapThread(t as Record<string, unknown>, kbMap))
-    : MOCK_SITUATIONS
+  // Map to SituationData
+  const situations: SituationData[] = valid.map((ctx) => {
+    const kbAlert   = kbMap.get(ctx.id) ?? null
+    const kbFlagged = !!kbAlert
+    const status    = deriveStatus(ctx.ai_status as string, ctx.alert_worthy as boolean)
+    const resolvedAt = status === 'resolved' ? (ctx.updated_at as string) : null
 
-  return <SituationsClient situations={situations} isMock={!hasRealData} />
+    const rawTitle = (ctx.topic_name as string | null) ?? (ctx.summary as string | null) ?? ''
+    const title    = rawTitle.length > 70 ? rawTitle.slice(0, 67) + '…' : rawTitle || 'Unnamed Situation'
+
+    return {
+      id:                  ctx.id as string,
+      title,
+      summary:             ctx.summary as string | null,
+      department:          ctx.department as string | null,
+      severity_peak:       ctx.severity as AlertSeverity | null,
+      status,
+      started_at:          (ctx.started_at ?? ctx.created_at) as string | null,
+      resolved_at:         resolvedAt,
+      synthesis_text:      ctx.summary as string | null,
+      source_name:         (ctx.source as { name?: string } | null)?.name ?? null,
+      message_count:       (ctx.message_count as number) ?? 0,
+      primary_sender:      ctx.primary_sender as string | null,
+      kb_flagged:          kbFlagged,
+      kb_outcome_met:      null,
+      kb_rule_name:        kbAlert?.knowledge_base_entry?.title ?? null,
+      kb_expected_outcome: kbAlert?.knowledge_base_entry?.expected_outcome ?? null,
+      recommended_action:  ctx.recommended_action as string | null,
+      rationale:           ctx.rationale as string | null,
+      entities:            ctx.entities_json as Record<string, unknown> | null,
+      context_text:        ctx.context_text as string | null,
+      context_preview:     ctx.context_preview as string | null,
+      active_step:         deriveActiveStep(ctx.ai_status as string, ctx.alert_worthy as boolean, kbFlagged),
+    }
+  })
+
+  // Sort: open critical/high first, then by started_at desc
+  situations.sort((a, b) => {
+    if (a.status !== 'resolved' && b.status === 'resolved') return -1
+    if (a.status === 'resolved' && b.status !== 'resolved') return 1
+    const sd = (SEV_ORDER[b.severity_peak ?? ''] ?? 0) - (SEV_ORDER[a.severity_peak ?? ''] ?? 0)
+    if (sd !== 0) return sd
+    return new Date(b.started_at ?? 0).getTime() - new Date(a.started_at ?? 0).getTime()
+  })
+
+  const departments = Array.from(new Set(situations.map((s) => s.department).filter(Boolean))) as string[]
+
+  return (
+    <SituationsClient
+      situations={situations}
+      departments={departments}
+      activeSourceCount={activeSourceCount ?? 0}
+    />
+  )
 }
