@@ -378,6 +378,16 @@ function RecipientIcons({ row }: { row: BriefingHistory }) {
           {r.channel === 'telegram' ? '📱' : '✉️'}
         </span>
       ))}
+      {row.voice_sent && (
+        <span title="Voice message sent"
+          style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 22, height: 22, borderRadius: 5, fontSize: 12, cursor: 'default',
+            background: 'rgba(62,207,207,0.1)', border: '1px solid rgba(62,207,207,0.2)',
+          }}>
+          🎙️
+        </span>
+      )}
       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>
         {row.recipients_succeeded}/{row.recipients_attempted}
       </span>
@@ -663,6 +673,7 @@ function BriefingCard({
   const [addChannel,  setAddChannel]  = useState<'telegram' | 'email'>('telegram')
   const [addTarget,   setAddTarget]   = useState('')
   const [addLabel,    setAddLabel]    = useState('')
+  const [addVoice,    setAddVoice]    = useState(true)
   const [addLoading,  setAddLoading]  = useState(false)
   const [removingId,  setRemovingId]  = useState<string | null>(null)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -681,8 +692,12 @@ function BriefingCard({
   async function handleAdd() {
     if (!addTarget.trim()) return
     setAddLoading(true)
-    await onAddRecipient(briefing.id, { channel: addChannel, target: addTarget.trim(), label: addLabel.trim() || null, is_active: true })
-    setAddTarget(''); setAddLabel(''); setAddOpen(false)
+    await onAddRecipient(briefing.id, {
+      channel: addChannel, target: addTarget.trim(),
+      label: addLabel.trim() || null, is_active: true,
+      send_voice: addChannel === 'telegram' ? addVoice : false,
+    })
+    setAddTarget(''); setAddLabel(''); setAddVoice(true); setAddOpen(false)
     setAddLoading(false)
   }
 
@@ -816,6 +831,9 @@ function BriefingCard({
                           {r.target.length > 22 ? r.target.slice(0, 22) + '…' : r.target}
                         </span>
                       </span>
+                      {r.channel === 'telegram' && r.send_voice && (
+                        <span title="Voice messages enabled" style={{ fontSize: 12, flexShrink: 0 }}>🎙️</span>
+                      )}
                       <span style={{ fontSize: 10, fontWeight: 700, color: rate.color, flexShrink: 0 }}
                         title={`Delivery rate for ${r.target}`}>
                         {rate.label}
@@ -864,6 +882,13 @@ function BriefingCard({
                     style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
                       color: 'var(--text-primary)', padding: '6px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
                   />
+                  {addChannel === 'telegram' && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <input type="checkbox" checked={addVoice} onChange={e => setAddVoice(e.target.checked)}
+                        style={{ accentColor: 'var(--accent)', cursor: 'pointer', width: 13, height: 13 }} />
+                      🎙️ Send voice message
+                    </label>
+                  )}
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={handleAdd} disabled={!addTarget.trim() || addLoading} style={{
                       flex: 1, padding: '6px 0', borderRadius: 6, fontSize: 12, fontWeight: 600,

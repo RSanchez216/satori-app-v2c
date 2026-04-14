@@ -220,6 +220,7 @@ export interface BriefingRecipient {
   target: string
   label: string | null
   is_active: boolean
+  send_voice: boolean
 }
 
 export interface RecipientResult {
@@ -242,6 +243,7 @@ export interface BriefingHistory {
   message_full_text: string | null
   recipient_results: RecipientResult[]
   error_message: string | null
+  voice_sent: boolean
   briefings?: { name: string } | null
 }
 

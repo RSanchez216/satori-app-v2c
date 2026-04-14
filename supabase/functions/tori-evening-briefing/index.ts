@@ -16,6 +16,10 @@ const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY            = Deno.env.get('RESEND_API_KEY') ?? ''
 const FROM_EMAIL                = Deno.env.get('REPORTS_FROM_EMAIL') ?? 'info@satoriknows.com'
+const ELEVENLABS_API_KEY        = Deno.env.get('ELEVENLABS_API_KEY') ?? ''
+
+// Rachel voice — warm, professional
+const ELEVENLABS_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 
@@ -228,6 +232,71 @@ function buildEmailHtml(message: string, briefingName: string, dateLabel: string
 </html>`
 }
 
+// ─── Voice helpers ────────────────────────────────────────────────────────────
+
+/** Strip markdown and clean text for natural speech. */
+function preprocessForSpeech(text: string): string {
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/\*/g, '')
+    .replace(/#+\s/g, '')
+    .replace(/---+/g, '')
+    .replace(/🚨/g, 'Alert:')
+    .replace(/⚠️/g, 'Warning:')
+    .replace(/🌆/g, '')
+    .replace(/📊/g, '')
+    .replace(/✅/g, '')
+    .replace(/❌/g, '')
+    // Strip remaining emoji (Unicode ranges)
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+async function textToSpeech(text: string): Promise<{ ok: boolean; audio?: Uint8Array; error?: string }> {
+  if (!ELEVENLABS_API_KEY) return { ok: false, error: 'ELEVENLABS_API_KEY not configured' }
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'content-type': 'application/json',
+        'accept': 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text: text.slice(0, 5000),
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    })
+    if (!r.ok) {
+      const msg = await r.text()
+      return { ok: false, error: `ElevenLabs ${r.status}: ${msg.slice(0, 200)}` }
+    }
+    const buf = await r.arrayBuffer()
+    return { ok: true, audio: new Uint8Array(buf) }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'TTS error' }
+  }
+}
+
+async function sendVoice(chatId: string, audio: Uint8Array): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const form = new FormData()
+    form.append('chat_id', chatId)
+    form.append('voice', new Blob([audio], { type: 'audio/mpeg' }), 'briefing.mp3')
+    const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendVoice`, {
+      method: 'POST',
+      body: form,
+    })
+    const json = await r.json()
+    if (json.ok) return { ok: true }
+    return { ok: false, error: json.description ?? `Telegram error ${r.status}` }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Network error' }
+  }
+}
+
 // ─── Delivery helpers ─────────────────────────────────────────────────────────
 
 async function sendTelegram(chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
@@ -403,6 +472,23 @@ Deno.serve(async (req: Request) => {
         })
       }
 
+      // Send voice messages to eligible Telegram recipients (after text, non-blocking)
+      let voiceSent = false
+      const voiceRecipients = recipients.filter(r => r.channel === 'telegram' && r.send_voice !== false)
+      if (voiceRecipients.length > 0) {
+        const speechText = preprocessForSpeech(message)
+        const ttsResult  = await textToSpeech(speechText)
+        if (ttsResult.ok && ttsResult.audio) {
+          for (const r of voiceRecipients) {
+            const vr = await sendVoice(r.target, ttsResult.audio)
+            if (vr.ok) { voiceSent = true }
+            else { console.error(`[tori-briefing] voice failed for ${r.target}: ${vr.error}`) }
+          }
+        } else {
+          console.error(`[tori-briefing] TTS failed: ${ttsResult.error}`)
+        }
+      }
+
       const status = succeeded === 0 ? 'error' : succeeded < recipients.length ? 'partial' : 'success'
 
       await supabase.from('briefing_history').insert({
@@ -413,6 +499,7 @@ Deno.serve(async (req: Request) => {
         message_preview:      message.slice(0, 200),
         message_full_text:    message,
         recipient_results:    recipientResults,
+        voice_sent:           voiceSent,
       })
 
       return new Response(JSON.stringify({
