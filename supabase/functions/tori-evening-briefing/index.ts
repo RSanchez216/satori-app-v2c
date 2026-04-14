@@ -16,7 +16,7 @@ const SUPABASE_URL              = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const RESEND_API_KEY            = Deno.env.get('RESEND_API_KEY') ?? ''
 const FROM_EMAIL                = Deno.env.get('REPORTS_FROM_EMAIL') ?? 'info@satoriknows.com'
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') ?? ''
+const OPENAI_API_KEY = Deno.env.get('OPEN_AI_API_KEY') ?? ''
 
 // ─── Severity helpers ─────────────────────────────────────────────────────────
 
@@ -251,7 +251,7 @@ function preprocessForSpeech(text: string): string {
 }
 
 async function textToSpeech(text: string): Promise<{ ok: boolean; audio?: Uint8Array; error?: string }> {
-  if (!OPENAI_API_KEY) return { ok: false, error: 'OPENAI_API_KEY not configured' }
+  if (!OPENAI_API_KEY) return { ok: false, error: 'OPEN_AI_API_KEY not configured' }
   try {
     const r = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
