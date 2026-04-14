@@ -4,7 +4,7 @@
   "description": "GramJS Telegram listener for Manas Express Samsara alerts → SATORI",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm index.ts",
+    "start": "npx tsx index.ts",
     "dev": "tsx watch index.ts",
     "generate-session": "tsx generate-session.ts",
     "build": "tsc"
