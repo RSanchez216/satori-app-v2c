@@ -1,0 +1,22 @@
+{
+  "name": "samsara-listener",
+  "version": "1.0.0",
+  "description": "GramJS Telegram listener for Manas Express Samsara alerts → SATORI",
+  "type": "module",
+  "scripts": {
+    "start": "node --loader ts-node/esm index.ts",
+    "dev": "tsx watch index.ts",
+    "generate-session": "tsx generate-session.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.4.1",
+    "telegram": "^2.22.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
