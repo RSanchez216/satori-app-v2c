@@ -50,12 +50,13 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
 
       {/* Panel */}
       <div
-        className="fixed right-0 top-0 h-full z-50 flex flex-col"
+        className="fixed inset-y-0 right-0 z-50 flex flex-col"
         style={{
           width: 480,
           background: 'var(--bg-elevated)',
           borderLeft: '1px solid var(--border-default)',
           boxShadow: '-8px 0 40px rgba(0,0,0,0.4)',
+          overflow: 'hidden',
         }}
       >
         {/* Header */}
@@ -99,7 +100,7 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
         </div>
 
         {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* Entities */}
           {entityEntries.length > 0 && (
