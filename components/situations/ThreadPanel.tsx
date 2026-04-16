@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Clock, MessageSquare, User, MapPin, Truck, Package, Bot, ArrowUpRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
@@ -38,7 +39,7 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
   // Format context_text as readable lines
   const lines = (s.context_text ?? s.context_preview ?? '').split('\n').filter(Boolean)
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop */}
       <div
@@ -213,7 +214,8 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   )
 }
 
