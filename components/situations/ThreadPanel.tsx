@@ -103,8 +103,8 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
           {/* Entities */}
-          {entityEntries.length > 0 && (
-            <Section title="Detected Entities">
+          <Section title="Detected Entities">
+            {entityEntries.length > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {entityEntries.map(([key, val]) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', fontSize: 11 }}>
@@ -114,8 +114,10 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
                   </div>
                 ))}
               </div>
-            </Section>
-          )}
+            ) : (
+              <Placeholder />
+            )}
+          </Section>
 
           {/* AI Summary */}
           {(s.synthesis_text || s.summary) && (
@@ -127,22 +129,26 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
           )}
 
           {/* Recommended Action */}
-          {s.recommended_action && (
-            <Section title="Recommended Action" accent>
+          <Section title="Recommended Action" accent>
+            {s.recommended_action ? (
               <p style={{ fontSize: 13, lineHeight: 1.65, color: 'var(--text-primary)', fontWeight: 500 }}>
                 {s.recommended_action}
               </p>
-            </Section>
-          )}
+            ) : (
+              <Placeholder />
+            )}
+          </Section>
 
           {/* Rationale */}
-          {s.rationale && (
-            <Section title="Tori's Rationale">
+          <Section title="Tori's Rationale">
+            {s.rationale ? (
               <p style={{ fontSize: 12, lineHeight: 1.65, color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                 {s.rationale}
               </p>
-            </Section>
-          )}
+            ) : (
+              <Placeholder />
+            )}
+          </Section>
 
           {/* KB Violation */}
           {s.kb_flagged && s.kb_rule_name && (
@@ -159,8 +165,8 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
           )}
 
           {/* Thread / Message Log */}
-          {lines.length > 0 && (
-            <Section title="Message Thread">
+          <Section title="Message Thread">
+            {lines.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {lines.map((line, i) => {
                   const isHeader = /^\[|\d{1,2}:\d{2}/.test(line) || line.startsWith('---')
@@ -184,15 +190,10 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
                   )
                 })}
               </div>
-            </Section>
-          )}
-
-          {/* Fallback if no context_text */}
-          {lines.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 12 }}>
-              Full thread not yet available for this context.
-            </div>
-          )}
+            ) : (
+              <Placeholder text="Full thread not yet available for this context." />
+            )}
+          </Section>
         </div>
 
         {/* Footer actions */}
@@ -229,10 +230,10 @@ function Section({ title, icon, accent, danger, children }: {
   children: React.ReactNode
 }) {
   const borderColor = danger ? 'var(--kb-purple)' : accent ? 'var(--accent)' : 'var(--border-subtle)'
-  const bg          = danger ? 'rgba(179,146,240,0.06)' : accent ? 'rgba(var(--accent-rgb),0.04)' : 'var(--bg-card)'
+  const bg          = danger ? 'rgba(179,146,240,0.06)' : accent ? 'rgba(62,207,207,0.04)' : 'var(--bg-card)'
 
   return (
-    <div style={{ borderRadius: 10, border: `1px solid ${borderColor}`, background: bg, overflow: 'hidden' }}>
+    <div style={{ borderRadius: 10, border: `1px solid ${borderColor}`, background: bg }}>
       <div style={{ padding: '8px 14px 6px', borderBottom: `1px solid ${borderColor}`, display: 'flex', alignItems: 'center', gap: 6 }}>
         {icon}
         <span style={{ fontSize: 10, fontWeight: 700, color: danger ? 'var(--kb-purple)' : accent ? 'var(--accent)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -241,5 +242,11 @@ function Section({ title, icon, accent, danger, children }: {
       </div>
       <div style={{ padding: '10px 14px' }}>{children}</div>
     </div>
+  )
+}
+
+function Placeholder({ text = 'No data available.' }: { text?: string }) {
+  return (
+    <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', margin: 0 }}>{text}</p>
   )
 }
