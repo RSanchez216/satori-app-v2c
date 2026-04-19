@@ -195,12 +195,19 @@ function isUnread(ctx: MessageContext): boolean {
   return ctx.ai_status !== 'done' || ctx.needs_review
 }
 
+/** processing state whose updated_at hasn't moved in >3 minutes */
+function isStuck(ctx: MessageContext): boolean {
+  if (ctx.ai_status !== 'processing') return false
+  const age = Date.now() - new Date(ctx.updated_at).getTime()
+  return age > 3 * 60 * 1000
+}
+
+/** pending for >5 minutes (never started) */
 function isStale(ctx: MessageContext): boolean {
-  if (ctx.ai_status !== 'pending' && ctx.ai_status !== 'processing') return false
-  if (!ctx.analyzed_at && !ctx.created_at) return true
-  const ref  = ctx.analyzed_at ?? ctx.created_at
-  const age  = Date.now() - new Date(ref).getTime()
-  return age > 5 * 60 * 1000  // > 5 minutes
+  if (ctx.ai_status !== 'pending') return false
+  const ref = ctx.analyzed_at ?? ctx.created_at
+  if (!ref) return true
+  return Date.now() - new Date(ref).getTime() > 5 * 60 * 1000
 }
 
 /* ─── Context Card ───────────────────────────────────────────────────────── */
@@ -216,17 +223,27 @@ function ContextCard({
   onReanalyze: (id: string) => Promise<void>
 }) {
   const [analyzing, setAnalyzing] = useState(false)
+  const [retrying,  setRetrying]  = useState(false)
   const unread    = isUnread(ctx)
+  const stuck     = !retrying && isStuck(ctx)
   const stale     = isStale(ctx)
   const entities  = ctx.entities_json as Record<string, string> | null
   const sevStyle  = ctx.severity ? (SEVERITY_STYLES[ctx.severity] ?? null) : null
   const deptDot   = ctx.department ? (DEPT_DOT[ctx.department] ?? 'var(--text-muted)') : null
+  const hasExistingAnalysis = !!(ctx.summary || ctx.rationale)
 
   async function triggerAnalyze(e: React.MouseEvent) {
     e.stopPropagation()
     setAnalyzing(true)
     await onReanalyze(ctx.id)
     setAnalyzing(false)
+  }
+
+  async function triggerRetry(e: React.MouseEvent) {
+    e.stopPropagation()
+    setRetrying(true)
+    await onReanalyze(ctx.id)
+    setRetrying(false)
   }
 
   return (
@@ -327,28 +344,40 @@ function ContextCard({
               </span>
             )}
 
-            {/* Stale AI — Analyze Now button */}
+            {/* Stuck processing — Retry badge */}
+            {stuck && (
+              <button
+                onClick={triggerRetry}
+                style={{
+                  fontSize: 11, fontWeight: 600,
+                  color: '#d97706',
+                  background: 'rgba(217,119,6,0.1)',
+                  border: '1px solid rgba(217,119,6,0.3)',
+                  borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                }}
+              >
+                <RefreshCw size={9} />
+                Stuck — Retry
+              </button>
+            )}
+
+            {/* Pending stale — Analyze Now / Re-Analyze */}
             {stale && (
               <button
                 onClick={triggerAnalyze}
                 disabled={analyzing}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'var(--accent)',
-                  background: 'var(--accent-dim)',
-                  border: '1px solid rgba(var(--accent-rgb), 0.2)',
-                  borderRadius: 6,
-                  padding: '3px 10px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
+                  fontSize: 11, fontWeight: 600,
+                  color: 'var(--accent)', background: 'var(--accent-dim)',
+                  border: '1px solid rgba(62,207,207,0.2)',
+                  borderRadius: 6, padding: '3px 10px', cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
                   opacity: analyzing ? 0.7 : 1,
                 }}
               >
                 <RefreshCw size={9} style={{ animation: analyzing ? 'spin 1s linear infinite' : undefined }} />
-                {analyzing ? 'Analyzing…' : 'Analyze Now'}
+                {analyzing ? 'Analyzing…' : hasExistingAnalysis ? 'Re-Analyze' : 'Analyze Now'}
               </button>
             )}
           </div>
@@ -494,9 +523,13 @@ function ContextCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
             <span>
               AI:{' '}
-              <span style={{ color: aiStatusColor(ctx.ai_status), fontWeight: 600 }}>
-                {ctx.ai_status}
-              </span>
+              {stuck ? (
+                <span style={{ color: '#d97706', fontWeight: 600 }}>stuck</span>
+              ) : (
+                <span style={{ color: aiStatusColor(ctx.ai_status), fontWeight: 600 }}>
+                  {retrying ? 'processing' : ctx.ai_status}
+                </span>
+              )}
             </span>
             {ctx.confidence != null && (
               <span>Confidence: <span style={{ color: 'var(--text-secondary)' }}>{ctx.confidence}%</span></span>
@@ -504,8 +537,8 @@ function ContextCard({
             {ctx.analyzed_at && (
               <span>Analyzed {formatDistanceToNow(new Date(ctx.analyzed_at), { addSuffix: true })}</span>
             )}
-            {/* Re-analyze always available from expanded view */}
-            {(ctx.ai_status === 'done' || ctx.ai_status === 'failed') && (
+            {/* Re-analyze from expanded view */}
+            {(ctx.ai_status === 'done' || ctx.ai_status === 'failed' || stuck) && (
               <button
                 onClick={async (e) => { e.stopPropagation(); setAnalyzing(true); await onReanalyze(ctx.id); setAnalyzing(false) }}
                 style={{
