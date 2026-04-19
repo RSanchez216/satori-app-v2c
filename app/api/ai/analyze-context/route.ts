@@ -16,10 +16,13 @@ export const runtime = 'nodejs'
  * manual triggers, retries, and external tooling.
  */
 export async function POST(req: NextRequest) {
+  const supabase = createAdminClient()
+  let contextId: string | undefined
+
   try {
-    const supabase = createAdminClient()
-    const body = await req.json().catch(() => ({}))
-    const contextId = body?.context_id as string | undefined
+    const body    = await req.json().catch(() => ({}))
+    contextId     = body?.context_id as string | undefined
+    const force   = !!(body?.force)
 
     if (!contextId) {
       return NextResponse.json({ error: 'context_id required' }, { status: 400 })
@@ -38,8 +41,16 @@ export async function POST(req: NextRequest) {
     if (!ctx.context_text) {
       return NextResponse.json({ error: 'Context has no text to analyze' }, { status: 400 })
     }
-    if (ctx.ai_status === 'processing') {
+    // Skip the guard when force=true so stuck/failed contexts can be retried
+    if (ctx.ai_status === 'processing' && !force) {
       return NextResponse.json({ message: 'Already processing' })
+    }
+    // Reset a stuck processing row so analyzeContext can proceed
+    if (force && ctx.ai_status === 'processing') {
+      await supabase
+        .from('message_contexts')
+        .update({ ai_status: 'pending' })
+        .eq('id', contextId)
     }
 
     // ── Run analysis ──────────────────────────────────────────────────
@@ -56,6 +67,13 @@ export async function POST(req: NextRequest) {
 
   } catch (err) {
     console.error('[/api/ai/analyze-context] error:', err)
+    // Mark the context as failed so the UI can surface it
+    if (contextId) {
+      await supabase
+        .from('message_contexts')
+        .update({ ai_status: 'failed', updated_at: new Date().toISOString() })
+        .eq('id', contextId)
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal error' },
       { status: 500 },
