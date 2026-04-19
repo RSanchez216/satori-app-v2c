@@ -42,9 +42,8 @@ export interface SituationData {
 }
 
 export function resolveTitle(s: SituationData): string {
-  // 1. summary / synthesis_text / title — if meaningful
-  const direct = s.summary ?? s.synthesis_text ?? s.title
-  if (direct && direct.trim() && direct.trim() !== 'Unnamed Situation') return direct.trim()
+  // 1. Dedicated title field only — never use summary/synthesis_text here
+  if (s.title && s.title.trim() && s.title.trim() !== 'Unnamed Situation') return s.title.trim()
 
   // 2. context_preview truncated to ~60 chars
   if (s.context_preview?.trim()) {
