@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { formatDistanceToNow, intervalToDuration } from 'date-fns'
+import { format, formatDistanceToNow, intervalToDuration } from 'date-fns'
 import {
   MessageSquare, Clock, Bot, Eye, ArrowUpRight,
   CheckCircle2, Building2,
@@ -39,6 +39,26 @@ export interface SituationData {
   context_text?: string | null
   context_preview?: string | null
   alert_worthy?: boolean
+}
+
+export function resolveTitle(s: SituationData): string {
+  // 1. summary / synthesis_text / title — if meaningful
+  const direct = s.summary ?? s.synthesis_text ?? s.title
+  if (direct && direct.trim() && direct.trim() !== 'Unnamed Situation') return direct.trim()
+
+  // 2. context_preview truncated to ~60 chars
+  if (s.context_preview?.trim()) {
+    const p = s.context_preview.trim()
+    return p.length > 60 ? p.slice(0, 60).trimEnd() + '…' : p
+  }
+
+  // 3. source name + date
+  if (s.source_name) {
+    const date = s.started_at ? ` · ${format(new Date(s.started_at), 'MMM d')}` : ''
+    return `${s.source_name}${date}`
+  }
+
+  return 'Unnamed Situation'
 }
 
 const BORDER_COLOR: Record<string, string> = {
@@ -153,7 +173,7 @@ export function SituationCard({ situation: s, onEscalate, onViewThread }: Props)
               className="text-[15px] font-bold leading-snug mb-1"
               style={{ color: 'var(--text-primary)', letterSpacing: '-0.01em' }}
             >
-              {s.title}
+              {resolveTitle(s)}
             </h3>
 
             {/* Meta row */}

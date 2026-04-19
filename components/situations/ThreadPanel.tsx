@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { X, Clock, MessageSquare, User, MapPin, Truck, Package, Bot, ArrowUpRight } from 'lucide-react'
 import { format } from 'date-fns'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
+import { resolveTitle } from './SituationCard'
 import type { SituationData } from './SituationCard'
 
 interface Props {
@@ -71,7 +72,7 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
                   </span>
                 )}
               </div>
-              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{s.title}</h2>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{resolveTitle(s)}</h2>
               <div className="flex items-center gap-3 mt-1 flex-wrap">
                 {s.department && (
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.department}</span>
