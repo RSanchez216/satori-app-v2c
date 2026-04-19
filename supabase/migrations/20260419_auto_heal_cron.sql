@@ -2,9 +2,9 @@
 -- Adds 'auto_heal' to the activity_type allowlist and schedules the
 -- auto-heal-stuck-contexts edge function to run every 5 minutes.
 --
--- Prerequisites (run once in SQL editor or set via Supabase dashboard):
---   ALTER DATABASE postgres SET app.supabase_url     = 'https://<ref>.supabase.co';
---   ALTER DATABASE postgres SET app.service_role_key = '<service_role_key>';
+-- !! BEFORE RUNNING: replace the two placeholder values below !!
+--   <SUPABASE_URL>        → your project URL, e.g. https://abcxyz.supabase.co
+--   <SERVICE_ROLE_KEY>    → your service_role key (Settings → API in dashboard)
 
 -- ── 1. Extend tori_activity_log activity types ─────────────────────────────
 ALTER TABLE tori_activity_log
@@ -29,23 +29,22 @@ ALTER TABLE tori_activity_log
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
--- ── 3. Schedule edge function every 5 minutes ──────────────────────────────
--- Remove any existing job with this name first to make migration idempotent.
-SELECT cron.unschedule('auto-heal-stuck-contexts')
-WHERE EXISTS (
-  SELECT 1 FROM cron.job WHERE jobname = 'auto-heal-stuck-contexts'
-);
+-- ── 3. Remove existing job (idempotent) ────────────────────────────────────
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-heal-stuck-contexts') THEN
+    PERFORM cron.unschedule('auto-heal-stuck-contexts');
+  END IF;
+END $$;
 
+-- ── 4. Schedule edge function every 5 minutes ──────────────────────────────
 SELECT cron.schedule(
-  'auto-heal-stuck-contexts',   -- job name
-  '*/5 * * * *',                -- every 5 minutes
+  'auto-heal-stuck-contexts',
+  '*/5 * * * *',
   $$
   SELECT net.http_post(
-    url     := current_setting('app.supabase_url') || '/functions/v1/auto-heal-stuck-contexts',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-      'Content-Type',  'application/json'
-    ),
+    url     := '<SUPABASE_URL>/functions/v1/auto-heal-stuck-contexts',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <SERVICE_ROLE_KEY>"}'::jsonb,
     body    := '{}'::jsonb
   )::text;
   $$
