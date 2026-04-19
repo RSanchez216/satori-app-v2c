@@ -26,6 +26,13 @@ const SEVERITY_STYLES: Record<string, { bg: string; color: string }> = {
   low:      { bg: 'rgba(86,211,100,0.1)',    color: 'var(--severity-low)' },
 }
 
+const SEVERITY_BORDER: Record<string, string> = {
+  critical: 'var(--severity-critical)',
+  high:     'var(--severity-high)',
+  medium:   'var(--severity-medium)',
+  low:      'var(--severity-low)',
+}
+
 const DEPT_DOT: Record<string, string> = {
   Dispatch:    'var(--accent)',
   Safety:      'var(--severity-critical)',
@@ -146,7 +153,10 @@ export function InboxClient({ contexts: initial }: Props) {
     setBulkRetrying(false)
     setBulkProgress(null)
     setBulkResult({ total, failedIds })
-    setTimeout(() => setBulkResult(null), 3000)
+    setTimeout(() => {
+      setBulkResult(null)
+      fetchContexts(dateRange)   // refresh list after "Done" message clears
+    }, 3000)
   }
 
   function retryFailed(failedIds: string[]) {
@@ -304,6 +314,7 @@ function ContextCard({
   const isError   = ctx.ai_status === 'failed'
   const entities  = ctx.entities_json as Record<string, string> | null
   const sevStyle  = ctx.severity ? (SEVERITY_STYLES[ctx.severity] ?? null) : null
+  const sevBorder = ctx.severity ? (SEVERITY_BORDER[ctx.severity] ?? null) : null
   const deptDot   = ctx.department ? (DEPT_DOT[ctx.department] ?? 'var(--text-muted)') : null
   const hasExistingAnalysis = !!(ctx.summary || ctx.rationale)
 
@@ -326,7 +337,7 @@ function ContextCard({
       style={{
         background: 'var(--bg-surface)',
         border: `1px solid ${isSelected ? 'rgba(62,207,207,0.4)' : unread ? 'rgba(62,207,207,0.3)' : 'var(--border-subtle)'}`,
-        borderLeft: `3px solid ${isSelected ? 'var(--accent)' : unread ? 'var(--accent)' : 'transparent'}`,
+        borderLeft: `3px solid ${isSelected ? 'var(--accent)' : sevBorder ?? (unread ? 'var(--accent)' : 'transparent')}`,
         borderRadius: 10,
         overflow: 'hidden',
         outline: isSelected ? '1px solid rgba(62,207,207,0.15)' : 'none',
