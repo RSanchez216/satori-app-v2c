@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import {
   Inbox, MessageSquare, ChevronDown, ChevronUp, AlertTriangle,
   User, Truck, Package, Eye, Clock, RefreshCw, Loader2, XCircle, X,
-  CheckSquare, Square,
+  CheckSquare, Square, CheckCircle2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
@@ -49,8 +49,10 @@ export function InboxClient({ contexts: initial }: Props) {
   const [expanded, setExpanded]       = useState<string | null>(null)
   const [dateRange, setDateRange]     = useState<DateRange>(() => buildDateRange('today'))
   const [loading, setLoading]         = useState(false)
-  const [selected, setSelected]       = useState<Set<string>>(new Set())
+  const [selected, setSelected]         = useState<Set<string>>(new Set())
   const [bulkRetrying, setBulkRetrying] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failedIds: string[] } | null>(null)
+  const [bulkResult,   setBulkResult]   = useState<{ total: number; failedIds: string[] } | null>(null)
 
   const fetchContexts = useCallback(async (range: DateRange) => {
     setLoading(true)
@@ -77,7 +79,7 @@ export function InboxClient({ contexts: initial }: Props) {
   })
 
   /** Core analyze call. Returns true on success, false on any error. */
-  async function handleReanalyze(id: string, opts?: { force?: boolean }): Promise<boolean> {
+  async function handleReanalyze(id: string, opts?: { force?: boolean; silent?: boolean }): Promise<boolean> {
     try {
       const res  = await fetch('/api/ai/analyze-context', {
         method:  'POST',
@@ -89,7 +91,7 @@ export function InboxClient({ contexts: initial }: Props) {
       if (!res.ok || data.error) {
         const errMsg = data.error ?? `HTTP ${res.status}`
         console.error('[inbox] analyze failed for', id, '—', errMsg, data)
-        toast.error('Analysis failed — check logs')
+        if (!opts?.silent) toast.error('Analysis failed — check logs')
         setContexts(prev => prev.map(c =>
           c.id === id ? { ...c, ai_status: 'failed', updated_at: new Date().toISOString() } : c
         ))
@@ -102,7 +104,7 @@ export function InboxClient({ contexts: initial }: Props) {
       return true
     } catch (err) {
       console.error('[inbox] analyze error for', id, err)
-      toast.error('Analysis failed — check logs')
+      if (!opts?.silent) toast.error('Analysis failed — check logs')
       setContexts(prev => prev.map(c =>
         c.id === id ? { ...c, ai_status: 'failed', updated_at: new Date().toISOString() } : c
       ))
@@ -126,15 +128,30 @@ export function InboxClient({ contexts: initial }: Props) {
   }
 
   async function handleBulkRetry() {
-    setBulkRetrying(true)
     const ids = [...selected]
+    const total = ids.length
+    const failedIds: string[] = []
+
+    setBulkRetrying(true)
+    setSelected(new Set())
+    setBulkProgress({ done: 0, total, failedIds: [] })
+
     for (let i = 0; i < ids.length; i++) {
-      await handleReanalyze(ids[i], { force: true })
+      const ok = await handleReanalyze(ids[i], { force: true, silent: true })
+      if (!ok) failedIds.push(ids[i])
+      setBulkProgress({ done: i + 1, total, failedIds: [...failedIds] })
       if (i < ids.length - 1) await new Promise(r => setTimeout(r, 300))
     }
+
     setBulkRetrying(false)
-    setSelected(new Set())
-    toast.success(`Queued ${ids.length} context${ids.length !== 1 ? 's' : ''} for re-analysis`)
+    setBulkProgress(null)
+    setBulkResult({ total, failedIds })
+    setTimeout(() => setBulkResult(null), 3000)
+  }
+
+  function retryFailed(failedIds: string[]) {
+    setBulkResult(null)
+    setSelected(new Set(failedIds))
   }
 
   return (
@@ -227,11 +244,14 @@ export function InboxClient({ contexts: initial }: Props) {
       )}
 
       {/* Bulk action bar */}
-      {selected.size > 0 && createPortal(
+      {(selected.size > 0 || bulkRetrying || bulkResult !== null) && createPortal(
         <BulkActionBar
           count={selected.size}
           retrying={bulkRetrying}
+          progress={bulkProgress}
+          result={bulkResult}
           onRetry={handleBulkRetry}
+          onRetryFailed={retryFailed}
           onSelectAllStuck={selectAllStuck}
           onClear={() => setSelected(new Set())}
         />,
@@ -542,56 +562,111 @@ function aiStatusColor(status: string) {
 }
 
 /* ─── Bulk Action Bar ────────────────────────────────────────────────────── */
-function BulkActionBar({ count, retrying, onRetry, onSelectAllStuck, onClear }: {
+function BulkActionBar({ count, retrying, progress, result, onRetry, onRetryFailed, onSelectAllStuck, onClear }: {
   count: number
   retrying: boolean
+  progress: { done: number; total: number; failedIds: string[] } | null
+  result:   { total: number; failedIds: string[] } | null
   onRetry: () => void
+  onRetryFailed: (ids: string[]) => void
   onSelectAllStuck: () => void
   onClear: () => void
 }) {
+  const pct       = progress ? Math.round((progress.done / progress.total) * 100) : 0
+  const remaining = progress ? progress.total - progress.done : 0
+  const etaSecs   = Math.ceil((remaining * 300) / 1000)
+
   return (
     <div
       style={{
         position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '10px 18px',
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '12px 20px',
         background: 'var(--bg-elevated)',
         border: '1px solid var(--border-default)',
         borderRadius: 12,
         boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
         zIndex: 200,
         whiteSpace: 'nowrap',
+        minWidth: 360,
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-        {count} selected
-      </span>
+      {/* ── Retrying in progress ── */}
+      {retrying && progress && (
+        <>
+          <Loader2 size={13} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+            Retrying {progress.done} / {progress.total}
+          </span>
+          {/* Progress bar */}
+          <div style={{ flex: 1, height: 4, background: 'var(--border-subtle)', borderRadius: 2, overflow: 'hidden', minWidth: 80 }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 2, transition: 'width 0.3s ease' }} />
+          </div>
+          {remaining > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>~{etaSecs}s</span>
+          )}
+        </>
+      )}
 
-      <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', flexShrink: 0 }} />
+      {/* ── Done — success ── */}
+      {!retrying && result && result.failedIds.length === 0 && (
+        <>
+          <CheckCircle2 size={14} style={{ color: 'var(--severity-low)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--severity-low)' }}>
+            Done — {result.total} context{result.total !== 1 ? 's' : ''} queued
+          </span>
+        </>
+      )}
 
-      <button
-        onClick={onSelectAllStuck}
-        style={{ fontSize: 12, fontWeight: 500, color: '#d97706', background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-      >
-        <AlertTriangle size={11} /> Select all stuck
-      </button>
+      {/* ── Done — with failures ── */}
+      {!retrying && result && result.failedIds.length > 0 && (
+        <>
+          <AlertTriangle size={13} style={{ color: 'var(--severity-high)', flexShrink: 0 }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+            Done — {result.total - result.failedIds.length} succeeded,{' '}
+            <span style={{ color: 'var(--severity-critical)' }}>{result.failedIds.length} failed</span>
+          </span>
+          <button
+            onClick={() => onRetryFailed(result.failedIds)}
+            style={{ fontSize: 12, fontWeight: 600, color: 'var(--severity-critical)', background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)', borderRadius: 7, padding: '4px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <RefreshCw size={10} /> Retry failed
+          </button>
+        </>
+      )}
 
-      <button
-        onClick={onRetry}
-        disabled={retrying}
-        style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid rgba(62,207,207,0.25)', borderRadius: 7, padding: '5px 14px', cursor: retrying ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, opacity: retrying ? 0.7 : 1 }}
-      >
-        {retrying
-          ? <><Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> Retrying…</>
-          : <><RefreshCw size={11} /> Retry Analysis</>}
-      </button>
+      {/* ── Idle — selection controls ── */}
+      {!retrying && !result && (
+        <>
+          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+            {count} selected
+          </span>
 
-      <button
-        onClick={onClear}
-        style={{ fontSize: 12, color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 8px' }}
-      >
-        <X size={12} /> Clear
-      </button>
+          <div style={{ width: 1, height: 18, background: 'var(--border-subtle)', flexShrink: 0 }} />
+
+          <button
+            onClick={onSelectAllStuck}
+            style={{ fontSize: 12, fontWeight: 500, color: '#d97706', background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            <AlertTriangle size={11} /> Select all stuck
+          </button>
+
+          <button
+            onClick={onRetry}
+            disabled={count === 0}
+            style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-dim)', border: '1px solid rgba(62,207,207,0.25)', borderRadius: 7, padding: '5px 14px', cursor: count === 0 ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5, opacity: count === 0 ? 0.5 : 1 }}
+          >
+            <RefreshCw size={11} /> Retry Analysis
+          </button>
+
+          <button
+            onClick={onClear}
+            style={{ fontSize: 12, color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 8px' }}
+          >
+            <X size={12} /> Clear
+          </button>
+        </>
+      )}
     </div>
   )
 }
