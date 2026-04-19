@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import {
   Inbox, MessageSquare, ChevronDown, ChevronUp, AlertTriangle,
   User, Truck, Package, Eye, Clock, RefreshCw, Loader2, XCircle, X,
-  CheckSquare, Square, CheckCircle2,
+  CheckSquare, Square, CheckCircle2, Minus,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
@@ -57,6 +57,8 @@ export function InboxClient({ contexts: initial }: Props) {
   const [dateRange, setDateRange]     = useState<DateRange>(() => buildDateRange('today'))
   const [loading, setLoading]         = useState(false)
   const [selected, setSelected]         = useState<Set<string>>(new Set())
+  const [showStuck, setShowStuck]               = useState(false)
+  const [showNeedsAnalysis, setShowNeedsAnalysis] = useState(false)
   const [bulkRetrying, setBulkRetrying] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failedIds: string[] } | null>(null)
   const [bulkResult,   setBulkResult]   = useState<{ total: number; failedIds: string[] } | null>(null)
@@ -82,8 +84,25 @@ export function InboxClient({ contexts: initial }: Props) {
     if (activeTab === 'alert_worthy' && !ctx.alert_worthy) return false
     if (activeTab === 'needs_review' && !ctx.needs_review) return false
     if (activeDept !== 'All Depts'   && ctx.department !== activeDept) return false
+    // Special OR filters
+    if (showStuck || showNeedsAnalysis) {
+      const matchesStuck   = showStuck         && (isStuck(ctx) || ctx.ai_status === 'failed')
+      const matchesNeeds   = showNeedsAnalysis && isStale(ctx)
+      if (!matchesStuck && !matchesNeeds) return false
+    }
     return true
   })
+
+  const allSelected  = filtered.length > 0 && filtered.every(ctx => selected.has(ctx.id))
+  const someSelected = !allSelected && filtered.some(ctx => selected.has(ctx.id))
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelected(prev => { const n = new Set(prev); filtered.forEach(c => n.delete(c.id)); return n })
+    } else {
+      setSelected(prev => { const n = new Set(prev); filtered.forEach(c => n.add(c.id)); return n })
+    }
+  }
 
   /** Core analyze call. Returns true on success, false on any error. */
   async function handleReanalyze(id: string, opts?: { force?: boolean; silent?: boolean }): Promise<boolean> {
@@ -212,6 +231,27 @@ export function InboxClient({ contexts: initial }: Props) {
 
         <div style={{ width: 1, height: 20, background: 'var(--border-subtle)' }} />
 
+        {/* Stuck / Needs Analysis toggles */}
+        {([
+          { key: 'stuck',          label: 'Stuck',          active: showStuck,           set: () => setShowStuck(v => !v),           color: '#d97706' },
+          { key: 'needs_analysis', label: 'Needs Analysis', active: showNeedsAnalysis,   set: () => setShowNeedsAnalysis(v => !v),   color: 'var(--accent)' },
+        ]).map(t => (
+          <button
+            key={t.key}
+            onClick={t.set}
+            style={{
+              padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              background: t.active ? `rgba(${t.key === 'stuck' ? '217,119,6' : '62,207,207'},0.12)` : 'transparent',
+              color: t.active ? t.color : 'var(--text-muted)',
+              border: t.active ? `1px solid rgba(${t.key === 'stuck' ? '217,119,6' : '62,207,207'},0.3)` : '1px solid transparent',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+
+        <div style={{ width: 1, height: 20, background: 'var(--border-subtle)' }} />
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
           {DEPT_FILTERS.map((dept) => (
             <button
@@ -233,6 +273,30 @@ export function InboxClient({ contexts: initial }: Props) {
           {filtered.length} context{filtered.length !== 1 ? 's' : ''}
         </div>
       </div>
+
+      {/* Select All row */}
+      {filtered.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 2 }}>
+          <button
+            onClick={toggleSelectAll}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6, color: allSelected ? 'var(--accent)' : someSelected ? 'var(--accent)' : 'var(--text-muted)' }}
+          >
+            {allSelected
+              ? <CheckSquare size={14} style={{ color: 'var(--accent)' }} />
+              : someSelected
+                ? <Minus size={14} style={{ color: 'var(--accent)' }} />
+                : <Square size={14} />}
+            <span style={{ fontSize: 12, fontWeight: 500 }}>
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </span>
+          </button>
+          {(someSelected || allSelected) && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {selected.size} of {filtered.length} selected
+            </span>
+          )}
+        </div>
+      )}
 
       {/* List */}
       {filtered.length === 0 ? (
