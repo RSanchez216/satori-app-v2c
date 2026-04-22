@@ -347,7 +347,13 @@ function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
         <div>
           {rules.map((rule) => {
             const pct = Math.round((rule.count / maxCount) * 100)
-            const color = SEV_COLOR[rule.severity] ?? 'var(--text-muted)'
+            const sevDotColor: Record<string, string> = {
+              critical: 'var(--severity-critical)',
+              high:     'var(--severity-high)',
+              medium:   'var(--severity-medium)',
+              low:      '#10b981',
+            }
+            const color = sevDotColor[rule.severity] ?? 'var(--bg-muted)'
             return (
               <div
                 key={rule.ruleId}

@@ -266,7 +266,7 @@ export function InboxClient({ contexts: initial }: Props) {
           {ruleContextIds === null && <Loader2 size={11} style={{ color: 'var(--text-muted)', animation: 'spin 1s linear infinite', flexShrink: 0 }} />}
           {ruleContextIds !== null && (
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {ruleContextIds.size} matching context{ruleContextIds.size !== 1 ? 's' : ''}
+              {filtered.length} matching context{filtered.length !== 1 ? 's' : ''}
             </span>
           )}
           <button

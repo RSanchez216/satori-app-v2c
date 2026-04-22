@@ -93,7 +93,7 @@ export async function GET(req: Request) {
         .limit(5),
 
       supabase
-        .from('knowledge_base_entries')
+        .from('knowledge_base_rules')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true),
 
