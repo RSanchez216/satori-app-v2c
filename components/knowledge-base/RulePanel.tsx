@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { X, ExternalLink, ToggleLeft, ToggleRight, Pencil, Trash2, ArrowRight, FlaskConical } from 'lucide-react'
 import { format } from 'date-fns'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
+import { Tip } from '@/components/ui/Tip'
 import type { KBRule } from '@/app/(main)/knowledge-base/knowledge-base-client'
 
 interface Props {
@@ -220,72 +221,81 @@ export function RulePanel({ rule, allRules, onClose, onEdit, onToggleActive, onD
 
         {/* ── Footer ── */}
         <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button
-            onClick={() => onEdit(rule)}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: 'var(--accent-dim)', color: 'var(--accent)',
-              border: '1px solid rgba(var(--accent-rgb),0.25)', cursor: 'pointer',
-            }}
-          >
-            <Pencil size={12} /> Edit Rule
-          </button>
+          <Tip text="Edit this rule's content and settings" side="top">
+            <button
+              onClick={() => onEdit(rule)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: 'var(--accent-dim)', color: 'var(--accent)',
+                border: '1px solid rgba(var(--accent-rgb),0.25)', cursor: 'pointer',
+              }}
+            >
+              <Pencil size={12} /> Edit Rule
+            </button>
+          </Tip>
 
-          <button
-            onClick={() => onToggleActive(rule)}
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
-              background: 'transparent', cursor: 'pointer',
-              border: '1px solid var(--border-subtle)',
-              color: rule.is_active ? 'var(--severity-high)' : 'var(--severity-low)',
-            }}
-          >
-            {rule.is_active ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
-            {rule.is_active ? 'Deactivate' : 'Activate'}
-          </button>
+          <Tip text="When deactivated, Tori will not check messages against this rule. Reversible at any time." side="top" maxWidth={260}>
+            <button
+              onClick={() => onToggleActive(rule)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                padding: '7px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: 'transparent', cursor: 'pointer',
+                border: '1px solid var(--border-subtle)',
+                color: rule.is_active ? 'var(--severity-high)' : 'var(--severity-low)',
+              }}
+            >
+              {rule.is_active ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+              {rule.is_active ? 'Deactivate' : 'Activate'}
+            </button>
+          </Tip>
 
-          <button
-            title="Test Rule (coming soon)"
-            disabled
-            style={{
-              width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '7px 0', borderRadius: 8, fontSize: 12,
-              background: 'transparent', border: '1px solid var(--border-subtle)',
-              color: 'var(--text-muted)', cursor: 'not-allowed', opacity: 0.5,
-            }}
-          >
-            <FlaskConical size={13} />
-          </button>
+          <Tip text="Run this rule against recent messages to preview matches — coming soon" side="top" maxWidth={240}>
+            <button
+              disabled
+              style={{
+                width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '7px 0', borderRadius: 8, fontSize: 12,
+                background: 'transparent', border: '1px solid var(--border-subtle)',
+                color: 'var(--text-muted)', cursor: 'not-allowed', opacity: 0.5,
+              }}
+            >
+              <FlaskConical size={13} />
+            </button>
+          </Tip>
 
-          <button
-            onClick={() => onDelete(rule.rule_id)}
-            style={{
-              width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '7px 0', borderRadius: 8, fontSize: 12,
-              background: 'transparent', border: '1px solid var(--border-subtle)',
-              color: 'var(--severity-critical)', cursor: 'pointer',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,81,73,0.08)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(248,81,73,0.3)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)' }}
-          >
-            <Trash2 size={13} />
-          </button>
+          <Tip text="Permanently delete this rule — cannot be undone" side="top">
+            <button
+              onClick={() => onDelete(rule.rule_id)}
+              style={{
+                width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '7px 0', borderRadius: 8, fontSize: 12,
+                background: 'transparent', border: '1px solid var(--border-subtle)',
+                color: 'var(--severity-critical)', cursor: 'pointer',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,81,73,0.08)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(248,81,73,0.3)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)' }}
+            >
+              <Trash2 size={13} />
+            </button>
+          </Tip>
 
-          <button
-            onClick={onClose}
-            style={{
-              width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: '7px 0', borderRadius: 8, fontSize: 12,
-              background: 'transparent', border: '1px solid var(--border-subtle)',
-              color: 'var(--text-muted)', cursor: 'pointer',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-          >
-            <X size={13} />
-          </button>
+          <Tip text="Close panel" side="top">
+            <button
+              onClick={onClose}
+              style={{
+                width: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '7px 0', borderRadius: 8, fontSize: 12,
+                background: 'transparent', border: '1px solid var(--border-subtle)',
+                color: 'var(--text-muted)', cursor: 'pointer',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
+            >
+              <X size={13} />
+            </button>
+          </Tip>
         </div>
       </div>
     </>,
