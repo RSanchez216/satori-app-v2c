@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
@@ -81,19 +81,18 @@ export function InboxClient({ contexts: initial }: Props) {
   const [ruleContextIds, setRuleContextIds] = useState<Set<string> | null>(null)
   const [ruleTitle,      setRuleTitle]      = useState<string | null>(null)
 
-  // Fetch context IDs + rule title when rule_id param is present
+  // Fetch the rule title once per rule_id change (independent of date range).
   useEffect(() => {
-    if (!ruleIdParam) { setRuleContextIds(null); setRuleTitle(null); return }
-    const sb = createClient()
-    Promise.all([
-      sb.rpc('get_context_ids_for_rule', { p_rule_id: ruleIdParam }),
-      sb.from('knowledge_base_rules').select('title').eq('rule_id', ruleIdParam).single(),
-    ]).then(([idsRes, ruleRes]) => {
-      const ids = new Set<string>((idsRes.data ?? []).map((r: { context_id: string }) => r.context_id))
-      setRuleContextIds(ids)
-      setRuleTitle((ruleRes.data as { title: string } | null)?.title ?? ruleIdParam)
-    })
-  }, [ruleIdParam]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!ruleIdParam) { setRuleTitle(null); return }
+    createClient()
+      .from('knowledge_base_rules')
+      .select('title')
+      .eq('rule_id', ruleIdParam)
+      .single()
+      .then(({ data }) => {
+        setRuleTitle((data as { title: string } | null)?.title ?? ruleIdParam)
+      })
+  }, [ruleIdParam])
 
   // Fetch KB violation counts whenever contexts change
   useEffect(() => {
@@ -113,21 +112,63 @@ export function InboxClient({ contexts: initial }: Props) {
       })
   }, [contexts]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchContexts = useCallback(async (range: DateRange) => {
+  const fetchContexts = useCallback(async (range: DateRange, ruleId: string | null) => {
     setLoading(true)
     try {
-      const { data } = await supabase
-        .from('message_contexts')
-        .select('*, source:sources(id, name, type)')
-        .gte('created_at', range.from)
-        .lt('created_at', range.to)
-        .order('created_at', { ascending: false })
-        .limit(200)
-      if (data) setContexts(data as CtxWithSource[])
+      if (ruleId) {
+        // Rule mode: date-window applies to kb_violations.detected_at, not contexts.created_at.
+        // Resolve matching context IDs via RPC, then fetch full rows by id.
+        setRuleContextIds(null)
+        const { data: idsData, error: idsErr } = await supabase.rpc('get_context_ids_for_rule', {
+          p_rule_id: ruleId,
+          p_start:   range.from,
+          p_end:     range.to,
+        })
+        if (idsErr) {
+          console.error('[inbox] rule-filter RPC failed:', idsErr)
+          setRuleContextIds(new Set())
+          setContexts([])
+          return
+        }
+        const ids = ((idsData ?? []) as { context_id: string }[]).map(r => r.context_id)
+        setRuleContextIds(new Set(ids))
+        if (ids.length === 0) {
+          setContexts([])
+          return
+        }
+        const { data } = await supabase
+          .from('message_contexts')
+          .select('*, source:sources(id, name, type)')
+          .in('id', ids)
+          .order('created_at', { ascending: false })
+          .limit(500)
+        if (data) setContexts(data as CtxWithSource[])
+      } else {
+        setRuleContextIds(null)
+        const { data } = await supabase
+          .from('message_contexts')
+          .select('*, source:sources(id, name, type)')
+          .gte('created_at', range.from)
+          .lt('created_at', range.to)
+          .order('created_at', { ascending: false })
+          .limit(200)
+        if (data) setContexts(data as CtxWithSource[])
+      }
     } finally {
       setLoading(false)
     }
   }, [supabase])
+
+  // Single source of truth for refetching when rule_id or dateRange changes.
+  // Initial mount in non-rule mode is skipped — server already provided data.
+  const initialMountRef = useRef(true)
+  useEffect(() => {
+    if (initialMountRef.current) {
+      initialMountRef.current = false
+      if (!ruleIdParam) return
+    }
+    fetchContexts(dateRange, ruleIdParam)
+  }, [ruleIdParam, dateRange, fetchContexts])
 
   const filtered = contexts.filter((ctx) => {
     if (ruleContextIds !== null && !ruleContextIds.has(ctx.id)) return false
@@ -225,7 +266,7 @@ export function InboxClient({ contexts: initial }: Props) {
     setBulkResult({ total, failedIds })
     setTimeout(() => {
       setBulkResult(null)
-      fetchContexts(dateRange)   // refresh list after "Done" message clears
+      fetchContexts(dateRange, ruleIdParam)   // refresh list after "Done" message clears
     }, 3000)
   }
 
@@ -251,7 +292,7 @@ export function InboxClient({ contexts: initial }: Props) {
         </div>
         <DateFilter
           value={dateRange}
-          onChange={range => { setDateRange(range); fetchContexts(range) }}
+          onChange={range => setDateRange(range)}
         />
       </div>
 
