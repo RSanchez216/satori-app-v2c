@@ -1,18 +1,28 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import {
   Inbox, MessageSquare, ChevronDown, ChevronUp, AlertTriangle,
   User, Truck, Package, Eye, Clock, RefreshCw, Loader2, XCircle, X,
-  CheckSquare, Square, CheckCircle2, Minus,
+  CheckSquare, Square, CheckCircle2, Minus, ShieldAlert,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
 import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Source } from '@/types/database'
+
+interface KBViolationRow {
+  rule_id:         string
+  matched_signals: string[]
+  rationale:       string | null
+  knowledge_base_rules: {
+    title:    string
+    severity: string
+  } | null
+}
 
 type FilterTab = 'all' | 'unread' | 'alert_worthy' | 'needs_review'
 type CtxWithSource = MessageContext & { source?: Source }
@@ -62,6 +72,25 @@ export function InboxClient({ contexts: initial }: Props) {
   const [bulkRetrying, setBulkRetrying] = useState(false)
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failedIds: string[] } | null>(null)
   const [bulkResult,   setBulkResult]   = useState<{ total: number; failedIds: string[] } | null>(null)
+  const [kbCounts, setKbCounts]         = useState<Map<string, number>>(new Map())
+
+  // Fetch KB violation counts whenever contexts change
+  useEffect(() => {
+    if (contexts.length === 0) { setKbCounts(new Map()); return }
+    const ids = contexts.map(c => c.id)
+    supabase
+      .from('kb_violations')
+      .select('context_id')
+      .in('context_id', ids)
+      .then(({ data }) => {
+        if (!data) return
+        const m = new Map<string, number>()
+        for (const row of data as { context_id: string }[]) {
+          m.set(row.context_id, (m.get(row.context_id) ?? 0) + 1)
+        }
+        setKbCounts(m)
+      })
+  }, [contexts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchContexts = useCallback(async (range: DateRange) => {
     setLoading(true)
@@ -309,6 +338,7 @@ export function InboxClient({ contexts: initial }: Props) {
               ctx={ctx}
               isExpanded={expanded === ctx.id}
               isSelected={selected.has(ctx.id)}
+              kbCount={kbCounts.get(ctx.id) ?? 0}
               onToggle={() => setExpanded(expanded === ctx.id ? null : ctx.id)}
               onReanalyze={handleReanalyze}
               onToggleSelect={toggleSelect}
@@ -359,6 +389,7 @@ function ContextCard({
   ctx,
   isExpanded,
   isSelected,
+  kbCount,
   onToggle,
   onReanalyze,
   onToggleSelect,
@@ -366,12 +397,31 @@ function ContextCard({
   ctx: CtxWithSource
   isExpanded: boolean
   isSelected: boolean
+  kbCount: number
   onToggle: () => void
   onReanalyze: (id: string, opts?: { force?: boolean }) => Promise<boolean>
   onToggleSelect: (id: string) => void
 }) {
   const [analyzing, setAnalyzing] = useState(false)
   const [retrying,  setRetrying]  = useState(false)
+  const [kbViolations, setKbViolations] = useState<KBViolationRow[] | null>(null)
+  const [kbLoading,    setKbLoading]    = useState(false)
+
+  // Fetch violations when expanded and we have KB matches
+  useEffect(() => {
+    if (!isExpanded || kbCount === 0) return
+    if (kbViolations !== null) return // already fetched
+    const supabase = createClient()
+    setKbLoading(true)
+    supabase
+      .from('kb_violations')
+      .select('rule_id, matched_signals, rationale, knowledge_base_rules(title, severity)')
+      .eq('context_id', ctx.id)
+      .then(({ data }) => {
+        setKbViolations((data as unknown as KBViolationRow[]) ?? [])
+        setKbLoading(false)
+      })
+  }, [isExpanded, kbCount]) // eslint-disable-line react-hooks/exhaustive-deps
   const unread    = isUnread(ctx)
   const stuck     = !retrying && isStuck(ctx)
   const stale     = isStale(ctx)
@@ -466,6 +516,13 @@ function ContextCard({
               {ctx.needs_review && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, padding: '2px 7px', borderRadius: 4, background: 'rgba(227,179,65,0.1)', color: 'var(--severity-high)' }}>
                   <Eye size={9} /> Review
+                </span>
+              )}
+
+              {/* KB violation badge */}
+              {kbCount > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'rgba(248,81,73,0.1)', color: 'var(--severity-critical)', letterSpacing: '0.02em' }}>
+                  <ShieldAlert size={9} /> {kbCount} KB
                 </span>
               )}
 
@@ -581,6 +638,52 @@ function ContextCard({
             <div style={{ marginTop: 12 }}>
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>AI Rationale</p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{ctx.rationale}</p>
+            </div>
+          )}
+
+          {/* KB Violations */}
+          {kbCount > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--severity-critical)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <ShieldAlert size={10} /> KB Violations ({kbCount})
+              </p>
+              {kbLoading ? (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
+                </span>
+              ) : (kbViolations ?? []).map(v => (
+                <div key={v.rule_id} style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(248,81,73,0.05)', border: '1px solid rgba(248,81,73,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                    <a
+                      href={`/knowledge-base?rule_id=${v.rule_id}`}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: 'var(--severity-critical)', textDecoration: 'none' }}
+                    >
+                      {v.rule_id}
+                    </a>
+                    {v.knowledge_base_rules?.title && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{v.knowledge_base_rules.title}</span>
+                    )}
+                    {v.knowledge_base_rules?.severity && (
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.04em', background: `var(--severity-${v.knowledge_base_rules.severity})18`, color: `var(--severity-${v.knowledge_base_rules.severity})` }}>
+                        {v.knowledge_base_rules.severity}
+                      </span>
+                    )}
+                  </div>
+                  {(v.matched_signals ?? []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                      {v.matched_signals.map((sig, i) => (
+                        <span key={i} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 10, background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+                          {sig}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {v.rationale && (
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: 0, fontStyle: 'italic' }}>{v.rationale}</p>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

@@ -1,12 +1,23 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Clock, MessageSquare, User, MapPin, Truck, Package, Bot, ArrowUpRight } from 'lucide-react'
+import { X, Clock, MessageSquare, User, MapPin, Truck, Package, Bot, ArrowUpRight, ShieldAlert, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
+import { createClient } from '@/lib/supabase/client'
 import { resolveTitle } from './SituationCard'
 import type { SituationData } from './SituationCard'
+
+interface KBViolationRow {
+  rule_id:         string
+  matched_signals: string[]
+  rationale:       string | null
+  knowledge_base_rules: {
+    title:    string
+    severity: string
+  } | null
+}
 
 interface Props {
   situation: SituationData
@@ -14,12 +25,28 @@ interface Props {
 }
 
 export function ThreadPanel({ situation: s, onClose }: Props) {
+  const [kbViolations, setKbViolations] = useState<KBViolationRow[] | null>(null)
+  const [kbLoading,    setKbLoading]    = useState(true)
+
   // Close on Escape
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  // Fetch KB violations for this context
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('kb_violations')
+      .select('rule_id, matched_signals, rationale, knowledge_base_rules(title, severity)')
+      .eq('context_id', s.id)
+      .then(({ data }) => {
+        setKbViolations((data as unknown as KBViolationRow[]) ?? [])
+        setKbLoading(false)
+      })
+  }, [s.id])
 
   const entities = s.entities ?? {}
   const entityEntries = Object.entries(entities).filter(([, v]) => v !== null && v !== undefined && v !== '')
@@ -151,17 +178,47 @@ export function ThreadPanel({ situation: s, onClose }: Props) {
             )}
           </Section>
 
-          {/* KB Violation */}
-          {s.kb_flagged && s.kb_rule_name && (
-            <Section title="KB Rule Violated" danger>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--kb-purple)', marginBottom: 6 }}>
-                {s.kb_rule_name}
-              </div>
-              {s.kb_expected_outcome && (
-                <p style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                  {s.kb_expected_outcome}
-                </p>
-              )}
+          {/* KB Violations (new table) */}
+          {(kbLoading || (kbViolations && kbViolations.length > 0)) && (
+            <Section
+              title={kbLoading ? 'KB Violations' : `KB Violations (${kbViolations!.length})`}
+              icon={<ShieldAlert size={11} style={{ color: 'var(--severity-critical)' }} />}
+              danger
+            >
+              {kbLoading ? (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Loader2 size={10} style={{ animation: 'spin 1s linear infinite' }} /> Loading…
+                </span>
+              ) : (kbViolations ?? []).map(v => (
+                <div key={v.rule_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(179,146,240,0.12)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
+                    <a
+                      href={`/knowledge-base?rule_id=${v.rule_id}`}
+                      style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: 'var(--kb-purple)', textDecoration: 'none' }}
+                    >
+                      {v.rule_id}
+                    </a>
+                    {v.knowledge_base_rules?.title && (
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{v.knowledge_base_rules.title}</span>
+                    )}
+                    {v.knowledge_base_rules?.severity && (
+                      <SeverityBadge severity={v.knowledge_base_rules.severity as 'critical' | 'high' | 'medium' | 'low'} />
+                    )}
+                  </div>
+                  {(v.matched_signals ?? []).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 5 }}>
+                      {v.matched_signals.map((sig, i) => (
+                        <span key={i} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'var(--bg-surface)', color: 'var(--text-secondary)', border: '1px solid var(--border-subtle)' }}>
+                          {sig}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {v.rationale && (
+                    <p style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.55, margin: 0, fontStyle: 'italic' }}>{v.rationale}</p>
+                  )}
+                </div>
+              ))}
             </Section>
           )}
 

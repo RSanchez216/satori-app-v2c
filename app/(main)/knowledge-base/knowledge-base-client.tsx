@@ -73,9 +73,9 @@ function getDomainColor(domain: string, allDomains: string[]): string {
 
 /* ── Main component ─────────────────────────────────────────────────────── */
 
-interface Props { initialRules: KBRule[] }
+interface Props { initialRules: KBRule[]; violationsToday: number }
 
-export function KnowledgeBaseClient({ initialRules }: Props) {
+export function KnowledgeBaseClient({ initialRules, violationsToday }: Props) {
   const [rules,           setRules]           = useState<KBRule[]>(initialRules)
   const [searchQuery,     setSearchQuery]     = useState('')
   const [domainFilter,    setDomainFilter]    = useState<Set<string>>(new Set())
@@ -302,8 +302,8 @@ export function KnowledgeBaseClient({ initialRules }: Props) {
           tip="Rules marked as critical severity — highest operational risk"
         />
         <StatCard
-          label="Violations Today" value={0} icon={Shield} color="var(--text-muted)" placeholder
-          tip="Number of situations today that triggered any KB rule — coming soon"
+          label="Violations Today" value={violationsToday} icon={Shield} color="var(--severity-critical)"
+          tip="KB rule violations detected today (midnight Chicago time)"
         />
       </div>
 

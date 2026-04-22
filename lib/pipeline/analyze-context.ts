@@ -2,6 +2,19 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ContextAnalysis } from './types'
 
+interface KBCandidate {
+  rule_id:            string
+  title:              string
+  violation_criteria: string
+  detection_signals:  string[] | null
+}
+
+interface KBMatch {
+  rule_id:         string
+  matched_signals: string[]
+  rationale:       string
+}
+
 interface SourceEntry {
   context_id:  string
   source_name: string | null
@@ -56,6 +69,92 @@ Severity guide:
 - low: routine updates, informational, no action needed
 
 Output ONLY the JSON object. No markdown, no explanation.`
+
+async function matchKBRules(
+  supabase: SupabaseClient,
+  contextId: string,
+  contextText: string,
+): Promise<void> {
+  const { data: rules } = await supabase
+    .from('knowledge_base_rules')
+    .select('rule_id, title, violation_criteria, detection_signals')
+    .eq('is_active', true)
+
+  if (!rules || rules.length === 0) return
+
+  const lower = contextText.toLowerCase()
+
+  const candidates: KBCandidate[] = (rules as KBCandidate[]).filter(r =>
+    (r.detection_signals ?? []).some(sig => lower.includes(sig.toLowerCase()))
+  )
+
+  if (candidates.length === 0) return
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+
+  const rulesJson = candidates.map(r => ({
+    rule_id:            r.rule_id,
+    title:              r.title,
+    violation_criteria: r.violation_criteria,
+    detection_signals:  r.detection_signals,
+  }))
+
+  const prompt = `You are evaluating whether a trucking operations conversation violates any compliance rules.
+
+CONVERSATION:
+${contextText.slice(0, 3000)}
+
+RULES TO EVALUATE:
+${JSON.stringify(rulesJson, null, 2)}
+
+For each rule whose violation_criteria is CLEARLY MET by the conversation, output a JSON array entry.
+Do NOT flag rules based on detection signals alone — the full violation_criteria must be satisfied.
+
+Output a JSON array (empty [] if no violations):
+[{ "rule_id": "exact rule_id", "matched_signals": ["signals that appeared"], "rationale": "1 sentence why criteria is met" }]
+
+Output ONLY the JSON array.`
+
+  const res = await client.messages.create({
+    model:      'claude-haiku-4-5-20251001',
+    max_tokens: 1024,
+    messages:   [{ role: 'user', content: prompt }],
+  })
+
+  const raw     = res.content[0].type === 'text' ? res.content[0].text : '[]'
+  const cleaned = raw.replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim()
+
+  let matches: KBMatch[]
+  try {
+    matches = JSON.parse(cleaned)
+    if (!Array.isArray(matches)) return
+  } catch { return }
+
+  if (matches.length === 0) return
+
+  const validIds = new Set(candidates.map(c => c.rule_id))
+  const valid    = matches.filter(m => m.rule_id && validIds.has(m.rule_id))
+  if (valid.length === 0) return
+
+  await supabase.from('kb_violations').upsert(
+    valid.map(m => ({
+      context_id:      contextId,
+      rule_id:         m.rule_id,
+      matched_signals: m.matched_signals ?? [],
+      rationale:       m.rationale ?? null,
+      detected_at:     new Date().toISOString(),
+    })),
+    { onConflict: 'context_id,rule_id', ignoreDuplicates: true },
+  )
+
+  await supabase.from('tori_activity_log').insert({
+    activity_type: 'kb_match',
+    title:         `KB violations detected: ${valid.length} rule${valid.length > 1 ? 's' : ''}`,
+    description:   valid.map(m => m.rule_id).join(', '),
+    status:        'done',
+    context_id:    contextId,
+  })
+}
 
 export async function analyzeContext(
   supabase: SupabaseClient,
@@ -184,6 +283,13 @@ export async function analyzeContext(
       status:        'done',
       context_id:    contextId,
     })
+
+    // KB rule matching — additive, non-fatal
+    try {
+      await matchKBRules(supabase, contextId, contextText)
+    } catch (kbErr) {
+      console.error('[analyzeContext] KB matching failed (non-fatal):', kbErr)
+    }
 
   } catch (err) {
     console.error('[analyzeContext] error:', err)
