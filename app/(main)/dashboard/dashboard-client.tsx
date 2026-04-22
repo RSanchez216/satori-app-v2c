@@ -6,11 +6,14 @@ import { formatDistanceToNow, format } from 'date-fns'
 import {
   Phone, Eye, FileText, AlertTriangle, CheckCircle2,
   Activity, ShieldCheck, Brain, Bot, ChevronRight, Zap, RefreshCw,
+  ShieldAlert, CheckCircle, ArrowUp, ArrowDown, Minus,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { SeverityBadge } from '@/components/ui/severity-badge'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
 import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
+import type { ViolationsSummary, TopRule } from './page'
 
 interface Props {
   stats: DashboardStats
@@ -20,6 +23,8 @@ interface Props {
   toriActivity: ToriActivityLog[]
   activeSources: (Source & { messagesCount: number })[]
   brainStatus: { kbRulesActive: number; messagesCount: number; contextsBuilt: number; topicsTracked: number }
+  violationsToday:    ViolationsSummary | null
+  topViolatedRules:   TopRule[]
 }
 
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
@@ -220,6 +225,169 @@ const sourceTypeColor: Record<string, string> = {
   webhook:  'var(--severity-low)',
 }
 
+/* ─── Severity colors map (shared) ─────────────────────────────────────── */
+const SEV_COLOR: Record<string, string> = {
+  critical: 'var(--severity-critical)',
+  high:     'var(--severity-high)',
+  medium:   'var(--severity-medium)',
+  low:      'var(--severity-low)',
+}
+
+/* ─── Violations Today KPI card ─────────────────────────────────────────── */
+function ViolationsTodayCard({ data }: { data: ViolationsSummary | null }) {
+  const router = useRouter()
+  const delta = data ? data.total - data.yesterday : 0
+  const glowColor = data && data.total > 0
+    ? (data.critical > 0 ? '#f85149' : data.high > 0 ? '#e3b341' : '#3ecfcf')
+    : '#56d364'
+
+  return (
+    <div
+      className="relative rounded-xl p-5 flex flex-col gap-3 overflow-hidden"
+      style={{
+        background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+        cursor: 'pointer',
+      }}
+      onClick={() => router.push('/knowledge-base')}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(248,81,73,0.3)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-subtle)' }}
+    >
+      {/* Corner glow */}
+      <div className="pointer-events-none absolute -top-6 -right-6 w-28 h-28 rounded-full"
+        style={{ background: `radial-gradient(circle, ${glowColor}22 0%, transparent 70%)` }} />
+
+      <div className="flex items-center justify-between relative">
+        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
+          Violations Today
+        </span>
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: `${glowColor}18`, color: glowColor }}>
+          <ShieldAlert size={13} />
+        </div>
+      </div>
+
+      <div className="relative">
+        {data === null ? (
+          <>
+            <p className="text-3xl font-black leading-none" style={{ color: 'var(--text-muted)', letterSpacing: '-0.02em' }}>—</p>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>Could not load</p>
+          </>
+        ) : (
+          <>
+            <p className="text-3xl font-black leading-none" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+              {data.total}
+            </p>
+            <div className="flex items-center gap-1 mt-1.5" style={{ fontSize: 11, fontWeight: 600 }}>
+              {delta === 0 ? (
+                <><Minus size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>no change vs yesterday</span></>
+              ) : delta > 0 ? (
+                <><ArrowUp size={10} style={{ color: 'var(--severity-critical)' }} /><span style={{ color: 'var(--severity-critical)' }}>{delta} vs yesterday</span></>
+              ) : (
+                <><ArrowDown size={10} style={{ color: 'var(--severity-low)' }} /><span style={{ color: 'var(--severity-low)' }}>{Math.abs(delta)} vs yesterday</span></>
+              )}
+            </div>
+            {/* Severity chips */}
+            {data.total > 0 && (
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {(['critical', 'high', 'medium', 'low'] as const).filter(s => data[s] > 0).map(s => (
+                  <span key={s} style={{
+                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                    background: `${SEV_COLOR[s]}18`, color: SEV_COLOR[s],
+                  }}>
+                    {data[s]} {s.slice(0, 4)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Top Violated Rules panel ──────────────────────────────────────────── */
+function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
+  const router = useRouter()
+  const maxCount = rules && rules.length > 0 ? rules[0].count : 1
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-2">
+          <ShieldAlert size={13} style={{ color: 'var(--severity-critical)' }} />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            Top Violated Rules · Today
+          </span>
+          <span
+            title="Rules ranked by how often Tori matched them against incoming situations since midnight CT."
+            style={{
+              width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'default', flexShrink: 0,
+            }}
+          >?</span>
+        </div>
+        <Link href="/knowledge-base" className="flex items-center gap-1" style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
+          View all <ChevronRight size={11} />
+        </Link>
+      </div>
+
+      {/* Body */}
+      {rules === null ? (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Could not load top rules</p>
+        </div>
+      ) : rules.length === 0 ? (
+        <div style={{ padding: '20px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <CheckCircle size={14} style={{ color: 'var(--severity-low)', flexShrink: 0 }} />
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No rule violations today — operations are quiet.</p>
+        </div>
+      ) : (
+        <div>
+          {rules.map((rule) => {
+            const pct = Math.round((rule.count / maxCount) * 100)
+            const color = SEV_COLOR[rule.severity] ?? 'var(--text-muted)'
+            return (
+              <div
+                key={rule.ruleId}
+                className="flex items-center gap-3"
+                style={{ padding: '9px 20px', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}
+                onClick={() => router.push(`/inbox?rule_id=${encodeURIComponent(rule.ruleId)}`)}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.018)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+              >
+                {/* Severity dot */}
+                <span className="flex-shrink-0 rounded-full" style={{ width: 8, height: 8, background: color, boxShadow: `0 0 5px ${color}99` }} />
+
+                {/* Title + domain */}
+                <div className="flex-1 min-w-0">
+                  <p className="truncate" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', maxWidth: 340 }}>
+                    {rule.title}
+                  </p>
+                  <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {rule.domain.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                  </p>
+                </div>
+
+                {/* Mini bar + count */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <div style={{ width: 60, height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', minWidth: 20, textAlign: 'right' }}>
+                    {rule.count}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export function DashboardClient(initialData: Props) {
   const [data, setData] = useState<Props>(initialData)
@@ -273,7 +441,7 @@ export function DashboardClient(initialData: Props) {
     setDateRange(range)
   }
 
-  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus } = data
+  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus, violationsToday, topViolatedRules } = data
   const today = format(new Date(), 'EEEE, MMMM d')
 
   return (
@@ -481,7 +649,7 @@ export function DashboardClient(initialData: Props) {
       </div>
 
       {/* ── Stat cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           label="Open Situations"
           value={stats.openSituations}
@@ -510,7 +678,11 @@ export function DashboardClient(initialData: Props) {
           glowColor={stats.kbViolations > 0 ? '#f85149' : '#56d364'}
           subtext="Open compliance flags"
         />
+        <ViolationsTodayCard data={violationsToday ?? null} />
       </div>
+
+      {/* ── Top Violated Rules ── */}
+      <TopViolatedRulesTile rules={topViolatedRules ?? null} />
 
       {/* ── Main 2-col grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { InboxClient } from './inbox-client'
 import type { MessageContext, Source } from '@/types/database'
@@ -13,5 +14,9 @@ export default async function InboxPage() {
     .order('created_at', { ascending: false })
     .limit(100)
 
-  return <InboxClient contexts={(contexts ?? []) as (MessageContext & { source?: Source })[]} />
+  return (
+    <Suspense>
+      <InboxClient contexts={(contexts ?? []) as (MessageContext & { source?: Source })[]} />
+    </Suspense>
+  )
 }

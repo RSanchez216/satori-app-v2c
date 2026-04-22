@@ -15,6 +15,23 @@ function getChicagoMidnightISO(): string {
 
 const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
 
+export type ViolationsSummary = {
+  total:     number
+  critical:  number
+  high:      number
+  medium:    number
+  low:       number
+  yesterday: number
+}
+
+export type TopRule = {
+  ruleId:   string
+  title:    string
+  domain:   string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  count:    number
+}
+
 async function getDashboardData() {
   const supabase = createClient()
   const todayMidnight = getChicagoMidnightISO()
@@ -89,6 +106,43 @@ async function getDashboardData() {
       .eq('is_active', true),
   ])
 
+  // KB tile RPCs — non-fatal, graceful degradation
+  const [violationsSummaryResult, topRulesResult] = await Promise.allSettled([
+    supabase.rpc('get_violations_today_summary').single(),
+    supabase.rpc('get_top_violated_rules_today', { p_limit: 10 }),
+  ])
+
+  const violationsSummaryRaw = violationsSummaryResult.status === 'fulfilled'
+    ? (violationsSummaryResult.value.data as unknown as Record<string, number> | null)
+    : null
+  if (violationsSummaryResult.status === 'fulfilled' && violationsSummaryResult.value.error) {
+    console.error('[dashboard] get_violations_today_summary:', violationsSummaryResult.value.error)
+  }
+
+  const topRulesRaw = topRulesResult.status === 'fulfilled'
+    ? (topRulesResult.value.data as unknown as Record<string, unknown>[] | null)
+    : null
+  if (topRulesResult.status === 'fulfilled' && topRulesResult.value.error) {
+    console.error('[dashboard] get_top_violated_rules_today:', topRulesResult.value.error)
+  }
+
+  const violationsToday: ViolationsSummary | null = violationsSummaryRaw ? {
+    total:     Number(violationsSummaryRaw.total_today     ?? 0),
+    critical:  Number(violationsSummaryRaw.critical_today  ?? 0),
+    high:      Number(violationsSummaryRaw.high_today      ?? 0),
+    medium:    Number(violationsSummaryRaw.medium_today    ?? 0),
+    low:       Number(violationsSummaryRaw.low_today       ?? 0),
+    yesterday: Number(violationsSummaryRaw.total_yesterday ?? 0),
+  } : null
+
+  const topViolatedRules: TopRule[] = (topRulesRaw ?? []).map(r => ({
+    ruleId:   r.rule_id   as string,
+    title:    r.title     as string,
+    domain:   r.domain    as string,
+    severity: r.severity  as TopRule['severity'],
+    count:    Number(r.violation_count ?? 0),
+  }))
+
   // Sort by severity desc, then started_at desc, take top 5
   const openContexts = ((openContextsRaw ?? []) as unknown as (MessageContext & { source?: Source })[])
     .sort((a, b) => {
@@ -149,6 +203,8 @@ async function getDashboardData() {
       contextsBuilt: contextsTodayCount ?? 0,
       topicsTracked: activeTopicsCount  ?? 0,
     },
+    violationsToday,
+    topViolatedRules,
   }
 }
 

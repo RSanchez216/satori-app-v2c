@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   Inbox, MessageSquare, ChevronDown, ChevronUp, AlertTriangle,
   User, Truck, Package, Eye, Clock, RefreshCw, Loader2, XCircle, X,
@@ -59,7 +60,11 @@ interface Props {
 }
 
 export function InboxClient({ contexts: initial }: Props) {
-  const supabase = createClient()
+  const supabase     = createClient()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const ruleIdParam  = searchParams.get('rule_id')
+
   const [contexts, setContexts]       = useState<CtxWithSource[]>(initial)
   const [activeTab, setActiveTab]     = useState<FilterTab>('all')
   const [activeDept, setActiveDept]   = useState('All Depts')
@@ -73,6 +78,22 @@ export function InboxClient({ contexts: initial }: Props) {
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number; failedIds: string[] } | null>(null)
   const [bulkResult,   setBulkResult]   = useState<{ total: number; failedIds: string[] } | null>(null)
   const [kbCounts, setKbCounts]         = useState<Map<string, number>>(new Map())
+  const [ruleContextIds, setRuleContextIds] = useState<Set<string> | null>(null)
+  const [ruleTitle,      setRuleTitle]      = useState<string | null>(null)
+
+  // Fetch context IDs + rule title when rule_id param is present
+  useEffect(() => {
+    if (!ruleIdParam) { setRuleContextIds(null); setRuleTitle(null); return }
+    const sb = createClient()
+    Promise.all([
+      sb.rpc('get_context_ids_for_rule', { p_rule_id: ruleIdParam }),
+      sb.from('knowledge_base_rules').select('title').eq('rule_id', ruleIdParam).single(),
+    ]).then(([idsRes, ruleRes]) => {
+      const ids = new Set<string>((idsRes.data ?? []).map((r: { context_id: string }) => r.context_id))
+      setRuleContextIds(ids)
+      setRuleTitle((ruleRes.data as { title: string } | null)?.title ?? ruleIdParam)
+    })
+  }, [ruleIdParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch KB violation counts whenever contexts change
   useEffect(() => {
@@ -109,6 +130,7 @@ export function InboxClient({ contexts: initial }: Props) {
   }, [supabase])
 
   const filtered = contexts.filter((ctx) => {
+    if (ruleContextIds !== null && !ruleContextIds.has(ctx.id)) return false
     if (activeTab === 'unread'       && !isUnread(ctx)) return false
     if (activeTab === 'alert_worthy' && !ctx.alert_worthy) return false
     if (activeTab === 'needs_review' && !ctx.needs_review) return false
@@ -233,6 +255,29 @@ export function InboxClient({ contexts: initial }: Props) {
         />
       </div>
 
+      {/* Rule filter chip */}
+      {ruleIdParam && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'rgba(248,81,73,0.06)', border: '1px solid rgba(248,81,73,0.2)', borderRadius: 10 }}>
+          <ShieldAlert size={12} style={{ color: 'var(--severity-critical)', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+            Rule: <span style={{ fontFamily: 'monospace', color: 'var(--severity-critical)' }}>{ruleIdParam}</span>
+            {ruleTitle && ruleTitle !== ruleIdParam && <span style={{ color: 'var(--text-secondary)', fontFamily: 'inherit' }}> · {ruleTitle}</span>}
+          </span>
+          {ruleContextIds === null && <Loader2 size={11} style={{ color: 'var(--text-muted)', animation: 'spin 1s linear infinite', flexShrink: 0 }} />}
+          {ruleContextIds !== null && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {ruleContextIds.size} matching context{ruleContextIds.size !== 1 ? 's' : ''}
+            </span>
+          )}
+          <button
+            onClick={() => router.push('/inbox')}
+            style={{ marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
       {/* Filter bar */}
       <div
         style={{
@@ -328,7 +373,23 @@ export function InboxClient({ contexts: initial }: Props) {
       )}
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && ruleContextIds !== null && ruleContextIds.size === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '48px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 12, textAlign: 'center' }}>
+          <ShieldAlert size={22} style={{ color: 'var(--border-default)' }} />
+          <div>
+            <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>No situations matched this rule yet</p>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, maxWidth: 320, lineHeight: 1.5 }}>
+              This rule may be newly active, or no qualifying messages have come in yet.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/inbox')}
+            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--accent-dim)', color: 'var(--accent)', border: '1px solid rgba(62,207,207,0.2)', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Clear filter
+          </button>
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyInbox hasData={contexts.length > 0} />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -33,6 +33,8 @@ export async function GET(req: Request) {
       { data: messagesTodayRaw },
       { count: contextsTodayCount },
       { count: activeTopicsCount },
+      violationsSummaryResult,
+      topRulesResult,
     ] = await Promise.all([
       (() => {
         let q = supabase
@@ -117,6 +119,9 @@ export async function GET(req: Request) {
         .from('ai_topics')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true),
+
+      supabase.rpc('get_violations_today_summary').single(),
+      supabase.rpc('get_top_violated_rules_today', { p_limit: 10 }),
     ])
 
     // Sort open contexts by severity desc, then started_at desc, take top 5
@@ -160,6 +165,26 @@ export async function GET(req: Request) {
       messagesCount: msgCountBySource[src.id] ?? 0,
     }))
 
+    const summaryRaw = violationsSummaryResult.data as unknown as Record<string, number> | null
+    const violationsToday = summaryRaw ? {
+      total:     Number(summaryRaw.total_today     ?? 0),
+      critical:  Number(summaryRaw.critical_today  ?? 0),
+      high:      Number(summaryRaw.high_today      ?? 0),
+      medium:    Number(summaryRaw.medium_today     ?? 0),
+      low:       Number(summaryRaw.low_today        ?? 0),
+      yesterday: Number(summaryRaw.total_yesterday  ?? 0),
+    } : null
+    if (violationsSummaryResult.error) console.error('[dashboard/stats] violations_summary:', violationsSummaryResult.error)
+
+    const topViolatedRules = (topRulesResult.data ?? []).map((r: Record<string, unknown>) => ({
+      ruleId:   r.rule_id  as string,
+      title:    r.title    as string,
+      domain:   r.domain   as string,
+      severity: r.severity as string,
+      count:    Number(r.violation_count ?? 0),
+    }))
+    if (topRulesResult.error) console.error('[dashboard/stats] top_rules:', topRulesResult.error)
+
     return NextResponse.json({
       stats: {
         openSituations,
@@ -181,6 +206,8 @@ export async function GET(req: Request) {
         contextsBuilt:  contextsTodayCount ?? 0,
         topicsTracked:  activeTopicsCount  ?? 0,
       },
+      violationsToday,
+      topViolatedRules,
     })
   } catch (err) {
     console.error('[dashboard/stats]', err)
