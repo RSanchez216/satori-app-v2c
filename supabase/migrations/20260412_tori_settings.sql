@@ -5,7 +5,7 @@
 -- TORI SETTINGS
 -- ============================================================
 create table if not exists tori_settings (
-  id                        uuid primary key default uuid_generate_v4(),
+  id                        uuid primary key default gen_random_uuid(),
   briefing_telegram_chat_id text,
   briefing_time             text not null default '18:00',  -- 24hr, Chicago time
   briefing_enabled          boolean not null default true,
@@ -16,7 +16,7 @@ create table if not exists tori_settings (
 
 -- Seed a default row so the function always finds one
 insert into tori_settings (id)
-select uuid_generate_v4()
+select gen_random_uuid()
 where not exists (select 1 from tori_settings);
 
 -- updated_at trigger
