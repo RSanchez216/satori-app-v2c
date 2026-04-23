@@ -86,11 +86,16 @@ export async function GET(req: Request) {
         .select('*')
         .eq('is_active', true),
 
-      supabase
-        .from('tori_activity_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5),
+      (() => {
+        let q = supabase
+          .from('tori_activity_log')
+          .select('*')
+          .gte('created_at', from)
+          .order('created_at', { ascending: false })
+          .limit(5)
+        if (to) q = q.lt('created_at', to)
+        return q
+      })(),
 
       supabase
         .from('knowledge_base_rules')
@@ -120,8 +125,8 @@ export async function GET(req: Request) {
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true),
 
-      supabase.rpc('get_violations_today_summary').single(),
-      supabase.rpc('get_top_violated_rules_today', { p_limit: 10 }),
+      supabase.rpc('get_violations_summary', { p_start: from, p_end: to ?? new Date().toISOString() }).single(),
+      supabase.rpc('get_top_violated_rules', { p_start: from, p_end: to ?? new Date().toISOString(), p_limit: 10 }),
     ])
 
     // Sort open contexts by severity desc, then started_at desc, take top 5
@@ -167,12 +172,12 @@ export async function GET(req: Request) {
 
     const summaryRaw = violationsSummaryResult.data as unknown as Record<string, number> | null
     const violationsToday = summaryRaw ? {
-      total:     Number(summaryRaw.total_today     ?? 0),
-      critical:  Number(summaryRaw.critical_today  ?? 0),
-      high:      Number(summaryRaw.high_today      ?? 0),
-      medium:    Number(summaryRaw.medium_today     ?? 0),
-      low:       Number(summaryRaw.low_today        ?? 0),
-      yesterday: Number(summaryRaw.total_yesterday  ?? 0),
+      total:    Number(summaryRaw.total          ?? 0),
+      critical: Number(summaryRaw.critical       ?? 0),
+      high:     Number(summaryRaw.high           ?? 0),
+      medium:   Number(summaryRaw.medium         ?? 0),
+      low:      Number(summaryRaw.low            ?? 0),
+      previous: Number(summaryRaw.total_previous ?? 0),
     } : null
     if (violationsSummaryResult.error) console.error('[dashboard/stats] violations_summary:', violationsSummaryResult.error)
 

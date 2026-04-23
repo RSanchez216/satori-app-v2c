@@ -233,10 +233,38 @@ const SEV_COLOR: Record<string, string> = {
   low:      'var(--severity-low)',
 }
 
-/* ─── Violations Today KPI card ─────────────────────────────────────────── */
-function ViolationsTodayCard({ data }: { data: ViolationsSummary | null }) {
+/* ─── Range-label helper ────────────────────────────────────────────────── */
+type RangeLabels = { sub: string; delta: string; tileSuffix: string }
+
+function rangeLabels(range: DateRange): RangeLabels {
+  switch (range.preset) {
+    case 'today':     return { sub: 'Since midnight CT',  delta: 'vs yesterday',         tileSuffix: 'Today' }
+    case 'yesterday': return { sub: 'Yesterday (CT)',     delta: 'vs day before',        tileSuffix: 'Yesterday' }
+    case '7d':        return { sub: 'Last 7 days',        delta: 'vs previous 7 days',   tileSuffix: 'Last 7 days' }
+    case '30d':       return { sub: 'Last 30 days',       delta: 'vs previous 30 days',  tileSuffix: 'Last 30 days' }
+    case 'custom': {
+      const fromD = new Date(range.from)
+      const toD   = new Date(range.to)
+      const days  = Math.max(1, Math.round((toD.getTime() - fromD.getTime()) / 86_400_000))
+      // The exclusive upper bound is midnight of (last day + 1), so format the inclusive end
+      const inclusiveEnd = new Date(toD.getTime() - 1)
+      const sub = days === 1
+        ? format(fromD, 'MMM d')
+        : `${format(fromD, 'MMM d')} – ${format(inclusiveEnd, 'MMM d')}`
+      return {
+        sub,
+        delta: `vs previous ${days} ${days === 1 ? 'day' : 'days'}`,
+        tileSuffix: sub,
+      }
+    }
+  }
+}
+
+/* ─── Violations KPI card ──────────────────────────────────────────────── */
+function ViolationsCard({ data, range }: { data: ViolationsSummary | null; range: DateRange }) {
   const router = useRouter()
-  const delta = data ? data.total - data.yesterday : 0
+  const labels = rangeLabels(range)
+  const delta = data ? data.total - data.previous : 0
   const glowColor = data && data.total > 0
     ? (data.critical > 0 ? '#f85149' : data.high > 0 ? '#e3b341' : '#3ecfcf')
     : '#56d364'
@@ -258,7 +286,7 @@ function ViolationsTodayCard({ data }: { data: ViolationsSummary | null }) {
 
       <div className="flex items-center justify-between relative">
         <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
-          Violations Today
+          Violations
         </span>
         <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{ background: `${glowColor}18`, color: glowColor }}>
@@ -277,13 +305,14 @@ function ViolationsTodayCard({ data }: { data: ViolationsSummary | null }) {
             <p className="text-3xl font-black leading-none" style={{ color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
               {data.total}
             </p>
-            <div className="flex items-center gap-1 mt-1.5" style={{ fontSize: 11, fontWeight: 600 }}>
+            <p style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500, marginTop: 4 }}>{labels.sub}</p>
+            <div className="flex items-center gap-1 mt-1" style={{ fontSize: 11, fontWeight: 600 }}>
               {delta === 0 ? (
-                <><Minus size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>no change vs yesterday</span></>
+                <><Minus size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>no change {labels.delta}</span></>
               ) : delta > 0 ? (
-                <><ArrowUp size={10} style={{ color: 'var(--severity-critical)' }} /><span style={{ color: 'var(--severity-critical)' }}>{delta} vs yesterday</span></>
+                <><ArrowUp size={10} style={{ color: 'var(--severity-critical)' }} /><span style={{ color: 'var(--severity-critical)' }}>{delta} {labels.delta}</span></>
               ) : (
-                <><ArrowDown size={10} style={{ color: 'var(--severity-low)' }} /><span style={{ color: 'var(--severity-low)' }}>{Math.abs(delta)} vs yesterday</span></>
+                <><ArrowDown size={10} style={{ color: 'var(--severity-low)' }} /><span style={{ color: 'var(--severity-low)' }}>{Math.abs(delta)} {labels.delta}</span></>
               )}
             </div>
             {/* Severity chips */}
@@ -307,9 +336,23 @@ function ViolationsTodayCard({ data }: { data: ViolationsSummary | null }) {
 }
 
 /* ─── Top Violated Rules panel ──────────────────────────────────────────── */
-function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
+function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range: DateRange }) {
   const router = useRouter()
   const maxCount = rules && rules.length > 0 ? rules[0].count : 1
+  const labels = rangeLabels(range)
+  const emptyMsg = range.preset === 'today'
+    ? 'No rule violations today — operations are quiet.'
+    : `No rule violations in ${labels.sub.toLowerCase()}.`
+
+  function gotoInbox(ruleId: string) {
+    const params = new URLSearchParams({
+      rule_id: ruleId,
+      preset:  range.preset,
+      from:    range.from,
+      to:      range.to,
+    })
+    router.push(`/inbox?${params.toString()}`)
+  }
 
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
@@ -318,10 +361,10 @@ function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
         <div className="flex items-center gap-2">
           <ShieldAlert size={13} style={{ color: 'var(--severity-critical)' }} />
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Top Violated Rules · Today
+            Top Violated Rules · {labels.tileSuffix}
           </span>
           <span
-            title="Rules ranked by how often Tori matched them against incoming situations since midnight CT."
+            title={`Rules ranked by how often Tori matched them against incoming situations during ${labels.sub.toLowerCase()}.`}
             style={{
               width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'default', flexShrink: 0,
@@ -341,7 +384,7 @@ function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
       ) : rules.length === 0 ? (
         <div style={{ padding: '20px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
           <CheckCircle size={14} style={{ color: 'var(--severity-low)', flexShrink: 0 }} />
-          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No rule violations today — operations are quiet.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{emptyMsg}</p>
         </div>
       ) : (
         <div>
@@ -359,7 +402,7 @@ function TopViolatedRulesTile({ rules }: { rules: TopRule[] | null }) {
                 key={rule.ruleId}
                 className="flex items-center gap-3"
                 style={{ padding: '9px 20px', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer' }}
-                onClick={() => router.push(`/inbox?rule_id=${encodeURIComponent(rule.ruleId)}`)}
+                onClick={() => gotoInbox(rule.ruleId)}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.018)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
@@ -402,7 +445,9 @@ export function DashboardClient(initialData: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [secondsAgo, setSecondsAgo] = useState(0)
 
-  const isToday = dateRange.preset === 'today'
+  // Live windows extend to "now" — they should auto-refresh.
+  // Yesterday and Custom are fixed periods that don't change.
+  const isLive = dateRange.preset === 'today' || dateRange.preset === '7d' || dateRange.preset === '30d'
 
   const fetchStats = useCallback(async (range: DateRange) => {
     setRefreshing(true)
@@ -425,12 +470,12 @@ export function DashboardClient(initialData: Props) {
   // Set initial lastUpdated client-side only (avoids hydration mismatch)
   useEffect(() => { setLastUpdated(new Date()) }, [])
 
-  // Auto-refresh every 60 seconds — only when viewing today
+  // Auto-refresh every 60 seconds — only for live windows (today/7d/30d)
   useEffect(() => {
-    if (!isToday) return
+    if (!isLive) return
     const interval = setInterval(() => fetchStats(dateRange), 60_000)
     return () => clearInterval(interval)
-  }, [isToday, dateRange, fetchStats])
+  }, [isLive, dateRange, fetchStats])
 
   // Re-fetch when date range changes
   useEffect(() => { fetchStats(dateRange) }, [dateRange, fetchStats])
@@ -449,6 +494,8 @@ export function DashboardClient(initialData: Props) {
 
   const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus, violationsToday, topViolatedRules } = data
   const today = format(new Date(), 'EEEE, MMMM d')
+  const labels = rangeLabels(dateRange)
+  const resolvedLabel = dateRange.preset === 'today' ? 'Resolved Today' : 'Resolved'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -482,7 +529,7 @@ export function DashboardClient(initialData: Props) {
         <div className="flex items-center gap-3 flex-shrink-0 flex-wrap justify-end">
           <DateFilter value={dateRange} onChange={handleDateChange} />
           <div className="flex items-center gap-2">
-          {lastUpdated && isToday && (
+          {lastUpdated && isLive && (
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>
               Updated {secondsAgo < 60 ? `${secondsAgo}s ago` : formatDistanceToNow(lastUpdated, { addSuffix: true })}
             </span>
@@ -664,11 +711,11 @@ export function DashboardClient(initialData: Props) {
           subtext="Across all sources"
         />
         <StatCard
-          label="Resolved Today"
+          label={resolvedLabel}
           value={stats.resolvedToday}
           icon={CheckCircle2}
           glowColor="#56d364"
-          subtext="Since midnight CT"
+          subtext={labels.sub}
         />
         <StatCard
           label="Health Score"
@@ -684,11 +731,11 @@ export function DashboardClient(initialData: Props) {
           glowColor={stats.kbViolations > 0 ? '#f85149' : '#56d364'}
           subtext="Open compliance flags"
         />
-        <ViolationsTodayCard data={violationsToday ?? null} />
+        <ViolationsCard data={violationsToday ?? null} range={dateRange} />
       </div>
 
       {/* ── Top Violated Rules ── */}
-      <TopViolatedRulesTile rules={topViolatedRules ?? null} />
+      <TopViolatedRulesTile rules={topViolatedRules ?? null} range={dateRange} />
 
       {/* ── Main 2-col grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -16,12 +16,12 @@ function getChicagoMidnightISO(): string {
 const severityOrder: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
 
 export type ViolationsSummary = {
-  total:     number
-  critical:  number
-  high:      number
-  medium:    number
-  low:       number
-  yesterday: number
+  total:    number
+  critical: number
+  high:     number
+  medium:   number
+  low:      number
+  previous: number
 }
 
 export type TopRule = {
@@ -35,6 +35,7 @@ export type TopRule = {
 async function getDashboardData() {
   const supabase = createClient()
   const todayMidnight = getChicagoMidnightISO()
+  const nowISO        = new Date().toISOString()
 
   const [
     { data: openContextsRaw },
@@ -82,6 +83,7 @@ async function getDashboardData() {
     supabase
       .from('tori_activity_log')
       .select('*')
+      .gte('created_at', todayMidnight)
       .order('created_at', { ascending: false })
       .limit(5),
 
@@ -106,33 +108,34 @@ async function getDashboardData() {
       .eq('is_active', true),
   ])
 
-  // KB tile RPCs — non-fatal, graceful degradation
+  // KB tile RPCs — non-fatal, graceful degradation. Initial SSR uses Today;
+  // client re-fetches via /api/dashboard/stats when the range changes.
   const [violationsSummaryResult, topRulesResult] = await Promise.allSettled([
-    supabase.rpc('get_violations_today_summary').single(),
-    supabase.rpc('get_top_violated_rules_today', { p_limit: 10 }),
+    supabase.rpc('get_violations_summary', { p_start: todayMidnight, p_end: nowISO }).single(),
+    supabase.rpc('get_top_violated_rules', { p_start: todayMidnight, p_end: nowISO, p_limit: 10 }),
   ])
 
   const violationsSummaryRaw = violationsSummaryResult.status === 'fulfilled'
     ? (violationsSummaryResult.value.data as unknown as Record<string, number> | null)
     : null
   if (violationsSummaryResult.status === 'fulfilled' && violationsSummaryResult.value.error) {
-    console.error('[dashboard] get_violations_today_summary:', violationsSummaryResult.value.error)
+    console.error('[dashboard] get_violations_summary:', violationsSummaryResult.value.error)
   }
 
   const topRulesRaw = topRulesResult.status === 'fulfilled'
     ? (topRulesResult.value.data as unknown as Record<string, unknown>[] | null)
     : null
   if (topRulesResult.status === 'fulfilled' && topRulesResult.value.error) {
-    console.error('[dashboard] get_top_violated_rules_today:', topRulesResult.value.error)
+    console.error('[dashboard] get_top_violated_rules:', topRulesResult.value.error)
   }
 
   const violationsToday: ViolationsSummary | null = violationsSummaryRaw ? {
-    total:     Number(violationsSummaryRaw.total_today     ?? 0),
-    critical:  Number(violationsSummaryRaw.critical_today  ?? 0),
-    high:      Number(violationsSummaryRaw.high_today      ?? 0),
-    medium:    Number(violationsSummaryRaw.medium_today    ?? 0),
-    low:       Number(violationsSummaryRaw.low_today       ?? 0),
-    yesterday: Number(violationsSummaryRaw.total_yesterday ?? 0),
+    total:    Number(violationsSummaryRaw.total          ?? 0),
+    critical: Number(violationsSummaryRaw.critical       ?? 0),
+    high:     Number(violationsSummaryRaw.high           ?? 0),
+    medium:   Number(violationsSummaryRaw.medium         ?? 0),
+    low:      Number(violationsSummaryRaw.low            ?? 0),
+    previous: Number(violationsSummaryRaw.total_previous ?? 0),
   } : null
 
   const topViolatedRules: TopRule[] = (topRulesRaw ?? []).map(r => ({

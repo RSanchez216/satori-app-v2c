@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
-import type { DateRange } from '@/components/ui/date-filter'
+import type { DateRange, DatePreset } from '@/components/ui/date-filter'
 import type { MessageContext, Source } from '@/types/database'
 
 interface KBViolationRow {
@@ -64,12 +64,30 @@ export function InboxClient({ contexts: initial }: Props) {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const ruleIdParam  = searchParams.get('rule_id')
+  const presetParam  = searchParams.get('preset')
+  const fromParam    = searchParams.get('from')
+  const toParam      = searchParams.get('to')
 
   const [contexts, setContexts]       = useState<CtxWithSource[]>(initial)
   const [activeTab, setActiveTab]     = useState<FilterTab>('all')
   const [activeDept, setActiveDept]   = useState('All Depts')
   const [expanded, setExpanded]       = useState<string | null>(null)
-  const [dateRange, setDateRange]     = useState<DateRange>(() => buildDateRange('today'))
+  // One-time initializer from URL params; subsequent tab clicks own the state.
+  const [dateRange, setDateRange]     = useState<DateRange>(() => {
+    const knownPresets: DatePreset[] = ['today', 'yesterday', '7d', '30d']
+    if (presetParam && (knownPresets as string[]).includes(presetParam)) {
+      return buildDateRange(presetParam as DatePreset)
+    }
+    if (fromParam && toParam) {
+      const from = new Date(fromParam)
+      const to   = new Date(toParam)
+      if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+        // Use raw bounds from URL; preset stays 'custom' so tab UI reflects that.
+        return { preset: 'custom', label: 'Custom', from: from.toISOString(), to: to.toISOString() }
+      }
+    }
+    return buildDateRange('today')
+  })
   const [loading, setLoading]         = useState(false)
   const [selected, setSelected]         = useState<Set<string>>(new Set())
   const [showStuck, setShowStuck]               = useState(false)
