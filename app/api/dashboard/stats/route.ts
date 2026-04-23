@@ -29,15 +29,14 @@ export async function GET(req: Request) {
       { count: resolvedTodayCount },
       { data: openAlertsRaw },
       { data: recentAlertsRaw },
-      { data: activeSourcesRaw },
       { data: toriActivityRaw },
       { count: kbRulesActive },
-      { data: messagesTodayRaw },
       { count: brainContextsToday },
       { count: brainMessagesToday },
       { data: lastMessageRow },
       violationsSummaryResult,
       topRulesResult,
+      samsaraResult,
     ] = await Promise.all([
       (() => {
         let q = supabase
@@ -84,11 +83,6 @@ export async function GET(req: Request) {
         return q
       })(),
 
-      supabase
-        .from('sources')
-        .select('*')
-        .eq('is_active', true),
-
       (() => {
         let q = supabase
           .from('tori_activity_log')
@@ -104,15 +98,6 @@ export async function GET(req: Request) {
         .from('knowledge_base_rules')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true),
-
-      (() => {
-        let q = supabase
-          .from('messages')
-          .select('source_id')
-          .gte('created_at', from)
-        if (to) q = q.lt('created_at', to)
-        return q
-      })(),
 
       // Brain Status — always today CT, ignores request range
       supabase
@@ -135,6 +120,7 @@ export async function GET(req: Request) {
 
       supabase.rpc('get_violations_summary', { p_start: from, p_end: to ?? new Date().toISOString() }).single(),
       supabase.rpc('get_top_violated_rules', { p_start: from, p_end: to ?? new Date().toISOString(), p_limit: 10 }),
+      supabase.rpc('get_samsara_alert_breakdown', { p_start: from, p_end: to ?? new Date().toISOString() }),
     ])
 
     // Sort open contexts by severity desc, then started_at desc, take top 5
@@ -165,19 +151,6 @@ export async function GET(req: Request) {
       toriBannerMessage = 'All systems nominal — no open situations or compliance flags. Connect your first source below to start monitoring your fleet communications.'
     }
 
-    // Per-source message count today
-    const msgCountBySource: Record<string, number> = {}
-    for (const msg of messagesTodayRaw ?? []) {
-      if (msg.source_id) {
-        msgCountBySource[msg.source_id] = (msgCountBySource[msg.source_id] ?? 0) + 1
-      }
-    }
-
-    const activeSources = (activeSourcesRaw ?? []).map((src) => ({
-      ...src,
-      messagesCount: msgCountBySource[src.id] ?? 0,
-    }))
-
     const summaryRaw = violationsSummaryResult.data as unknown as Record<string, number> | null
     const violationsToday = summaryRaw ? {
       total:    Number(summaryRaw.total          ?? 0),
@@ -198,6 +171,16 @@ export async function GET(req: Request) {
     }))
     if (topRulesResult.error) console.error('[dashboard/stats] top_rules:', topRulesResult.error)
 
+    const samsaraBreakdown = samsaraResult.error
+      ? null
+      : (samsaraResult.data ?? []).map((r: Record<string, unknown>) => ({
+          alertType: r.alert_type as string,
+          tier:      r.tier       as string,
+          count:     Number(r.count ?? 0),
+          lastAt:    (r.last_at as string | null) ?? null,
+        }))
+    if (samsaraResult.error) console.error('[dashboard/stats] samsara_breakdown:', samsaraResult.error)
+
     return NextResponse.json({
       stats: {
         openSituations,
@@ -212,7 +195,6 @@ export async function GET(req: Request) {
       openContexts,
       recentAlerts: recentAlertsRaw ?? [],
       toriActivity: toriActivityRaw ?? [],
-      activeSources,
       brainStatus: {
         kbRulesActive:  kbRulesActive       ?? 0,
         messagesToday:  brainMessagesToday  ?? 0,
@@ -221,6 +203,7 @@ export async function GET(req: Request) {
       },
       violationsToday,
       topViolatedRules,
+      samsaraBreakdown,
     })
   } catch (err) {
     console.error('[dashboard/stats]', err)

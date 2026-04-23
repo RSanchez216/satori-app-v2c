@@ -15,13 +15,26 @@ import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
 import type { ViolationsSummary, TopRule } from './page'
 
+export type SamsaraTier = 'critical' | 'high' | 'operational' | 'info'
+export type SamsaraAlertType =
+  | 'crash' | 'distraction'
+  | 'vehicle_fault' | 'speeding' | 'harsh_brake' | 'def_system'
+  | 'idle' | 'fuel_low'
+  | 'daily_digest'
+
+export type SamsaraRow = {
+  alertType: SamsaraAlertType
+  tier:      SamsaraTier
+  count:     number
+  lastAt:    string | null
+}
+
 interface Props {
   stats: DashboardStats
   toriBannerMessage: string
   openContexts: (MessageContext & { source?: Source })[]
   recentAlerts: (Alert & { source?: Source })[]
   toriActivity: ToriActivityLog[]
-  activeSources: (Source & { messagesCount: number })[]
   brainStatus: {
     kbRulesActive:  number
     messagesToday:  number
@@ -30,6 +43,7 @@ interface Props {
   }
   violationsToday:    ViolationsSummary | null
   topViolatedRules:   TopRule[]
+  samsaraBreakdown:   SamsaraRow[] | null
 }
 
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
@@ -223,13 +237,6 @@ const severityIconConfig: Record<string, { icon: React.ElementType; color: strin
   low:      { icon: Activity,      color: 'var(--severity-low)' },
 }
 
-const sourceTypeColor: Record<string, string> = {
-  telegram: 'var(--accent)',
-  email:    'var(--kb-purple)',
-  api:      'var(--severity-high)',
-  webhook:  'var(--severity-low)',
-}
-
 /* ─── Severity colors map (shared) ─────────────────────────────────────── */
 const SEV_COLOR: Record<string, string> = {
   critical: 'var(--severity-critical)',
@@ -341,6 +348,103 @@ function ViolationsCard({ data, range }: { data: ViolationsSummary | null; range
 }
 
 /* ─── Top Violated Rules panel ──────────────────────────────────────────── */
+/* ─── Samsara Alerts breakdown ─────────────────────────────────────────── */
+const SAMSARA_META: Record<SamsaraAlertType, { label: string; icon: string; tier: SamsaraTier; tierOrder: number }> = {
+  crash:         { label: 'Crash / Impact',          icon: '🛑', tier: 'critical',    tierOrder: 0 },
+  distraction:   { label: 'Driver Distraction',      icon: '📱', tier: 'critical',    tierOrder: 1 },
+  vehicle_fault: { label: 'Vehicle Fault (SPN/FMI)', icon: '⚙️', tier: 'high',        tierOrder: 2 },
+  speeding:      { label: 'Speeding',                icon: '🏎️', tier: 'high',        tierOrder: 3 },
+  harsh_brake:   { label: 'Harsh Braking',           icon: '🏁', tier: 'high',        tierOrder: 4 },
+  def_system:    { label: 'DEF System',              icon: '🧪', tier: 'high',        tierOrder: 5 },
+  idle:          { label: 'Engine Idle',             icon: '💤', tier: 'operational', tierOrder: 6 },
+  fuel_low:      { label: 'Fuel Low',                icon: '⛽', tier: 'operational', tierOrder: 7 },
+  daily_digest:  { label: 'Daily Safety Digest',     icon: '📊', tier: 'info',        tierOrder: 8 },
+}
+
+const TIER_COLOR: Record<SamsaraTier, string> = {
+  critical:    'var(--severity-critical)',
+  high:        'var(--severity-high)',
+  operational: 'var(--severity-medium)',
+  info:        'var(--text-muted)',
+}
+
+function SamsaraAlertsTile({ rows, range }: { rows: SamsaraRow[] | null; range: DateRange }) {
+  const labels = rangeLabels(range)
+  const visible = (rows ?? [])
+    .filter(r => r.count > 0 && SAMSARA_META[r.alertType])
+    .sort((a, b) => SAMSARA_META[a.alertType].tierOrder - SAMSARA_META[b.alertType].tierOrder)
+
+  // Per-tier max for bar normalization, so critical rows stay visible next to high-volume operational
+  const maxByTier: Record<SamsaraTier, number> = { critical: 1, high: 1, operational: 1, info: 1 }
+  for (const r of visible) {
+    if (r.count > maxByTier[r.tier]) maxByTier[r.tier] = r.count
+  }
+
+  const total = visible.reduce((sum, r) => sum + r.count, 0)
+  const lastAt = visible.reduce<string | null>((acc, r) => {
+    if (!r.lastAt) return acc
+    if (!acc) return r.lastAt
+    return new Date(r.lastAt).getTime() > new Date(acc).getTime() ? r.lastAt : acc
+  }, null)
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+      <div className="flex items-center gap-2" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <span style={{ fontSize: 13 }}>🚨</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+          Samsara Alerts · {labels.tileSuffix}
+        </span>
+      </div>
+
+      {rows === null ? (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Could not load Samsara alerts</p>
+        </div>
+      ) : visible.length === 0 ? (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No Samsara alerts in this window.</p>
+        </div>
+      ) : (
+        <>
+          <div style={{ padding: '10px 16px 4px', display: 'flex', flexDirection: 'column' }}>
+            {visible.map((r, i) => {
+              const meta  = SAMSARA_META[r.alertType]
+              const color = TIER_COLOR[r.tier]
+              const pct   = Math.round((r.count / maxByTier[r.tier]) * 100)
+              const prevTier = i > 0 ? SAMSARA_META[visible[i - 1].alertType].tier : null
+              const tierBreak = prevTier !== null && prevTier !== r.tier
+              return (
+                <div
+                  key={r.alertType}
+                  className="flex items-center gap-2.5"
+                  style={{ padding: '7px 4px', marginTop: tierBreak ? 6 : 0, borderTop: tierBreak ? '1px dashed var(--border-subtle)' : 'none' }}
+                >
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>{meta.icon}</span>
+                  <span style={{ flex: '0 0 auto', fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', minWidth: 130 }}>
+                    {meta.label}
+                  </span>
+                  <div style={{ flex: 1, height: 4, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden', minWidth: 30 }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.4s ease' }} />
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', minWidth: 26, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {r.count}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ padding: '8px 20px 14px' }}>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, margin: 0 }}>
+              {total} alert{total !== 1 ? 's' : ''}
+              {lastAt && <> · Last alert: <LastActivity at={lastAt} /></>}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range: DateRange }) {
   const router = useRouter()
   const maxCount = rules && rules.length > 0 ? rules[0].count : 1
@@ -502,7 +606,7 @@ export function DashboardClient(initialData: Props) {
     setDateRange(range)
   }
 
-  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, activeSources, brainStatus, violationsToday, topViolatedRules } = data
+  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, brainStatus, violationsToday, topViolatedRules, samsaraBreakdown } = data
   const today = format(new Date(), 'EEEE, MMMM d')
   const labels = rangeLabels(dateRange)
   const resolvedLabel = dateRange.preset === 'today' ? 'Resolved Today' : 'Resolved'
@@ -990,76 +1094,8 @@ export function DashboardClient(initialData: Props) {
           />
         </div>
 
-        {/* Active sources */}
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <div
-            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              Active Sources
-            </span>
-          </div>
-
-          <div style={{ padding: '12px 20px' }}>
-            {activeSources.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>No sources connected</p>
-                <Link href="/sources">
-                  <button
-                    style={{
-                      fontSize: 12,
-                      padding: '6px 14px',
-                      borderRadius: 8,
-                      background: 'var(--accent-dim)',
-                      color: 'var(--accent)',
-                      border: '1px solid rgba(var(--accent-rgb),0.2)',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Connect first source
-                  </button>
-                </Link>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {activeSources.map((src) => {
-                  const dot = sourceTypeColor[src.type] ?? 'var(--text-muted)'
-                  return (
-                    <div key={src.id} className="flex items-center gap-2.5">
-                      {/* 6px type dot */}
-                      <span
-                        className="flex-shrink-0 rounded-full"
-                        style={{
-                          width: 6,
-                          height: 6,
-                          background: dot,
-                          boxShadow: `0 0 5px ${dot}99`,
-                        }}
-                      />
-                      <span
-                        className="flex-1 truncate"
-                        style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)' }}
-                      >
-                        {src.name}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: 'var(--text-muted)',
-                          flexShrink: 0,
-                          fontWeight: 500,
-                        }}
-                      >
-                        {src.messagesCount > 0 ? `${src.messagesCount} msg` : '—'}
-                      </span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Samsara alerts breakdown */}
+        <SamsaraAlertsTile rows={samsaraBreakdown} range={dateRange} />
 
         {/* Brain status */}
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>

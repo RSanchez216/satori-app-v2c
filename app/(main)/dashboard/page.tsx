@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { DashboardClient } from './dashboard-client'
 import type { MessageContext, Alert, Source, ToriActivityLog } from '@/types/database'
+import type { SamsaraAlertType, SamsaraRow, SamsaraTier } from './dashboard-client'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,10 +43,9 @@ async function getDashboardData() {
     { count: resolvedTodayCount },
     { data: openAlertsRaw },
     { data: recentAlertsRaw },
-    { data: activeSourcesRaw },
     { data: toriActivityRaw },
     { count: kbRulesActive },
-    { data: messagesTodayRaw },
+    { count: brainMessagesToday },
     { count: contextsTodayCount },
     { data: lastMessageRow },
   ] = await Promise.all([
@@ -76,11 +76,6 @@ async function getDashboardData() {
       .limit(5),
 
     supabase
-      .from('sources')
-      .select('*')
-      .eq('is_active', true),
-
-    supabase
       .from('tori_activity_log')
       .select('*')
       .gte('created_at', todayMidnight)
@@ -94,7 +89,7 @@ async function getDashboardData() {
 
     supabase
       .from('messages')
-      .select('source_id')
+      .select('*', { count: 'exact', head: true })
       .gte('created_at', todayMidnight),
 
     supabase
@@ -112,9 +107,10 @@ async function getDashboardData() {
 
   // KB tile RPCs — non-fatal, graceful degradation. Initial SSR uses Today;
   // client re-fetches via /api/dashboard/stats when the range changes.
-  const [violationsSummaryResult, topRulesResult] = await Promise.allSettled([
+  const [violationsSummaryResult, topRulesResult, samsaraResult] = await Promise.allSettled([
     supabase.rpc('get_violations_summary', { p_start: todayMidnight, p_end: nowISO }).single(),
     supabase.rpc('get_top_violated_rules', { p_start: todayMidnight, p_end: nowISO, p_limit: 10 }),
+    supabase.rpc('get_samsara_alert_breakdown', { p_start: todayMidnight, p_end: nowISO }),
   ])
 
   const violationsSummaryRaw = violationsSummaryResult.status === 'fulfilled'
@@ -148,6 +144,21 @@ async function getDashboardData() {
     count:    Number(r.violation_count ?? 0),
   }))
 
+  const samsaraRaw = samsaraResult.status === 'fulfilled'
+    ? (samsaraResult.value.data as unknown as Record<string, unknown>[] | null)
+    : null
+  if (samsaraResult.status === 'fulfilled' && samsaraResult.value.error) {
+    console.error('[dashboard] get_samsara_alert_breakdown:', samsaraResult.value.error)
+  }
+  const samsaraBreakdown: SamsaraRow[] | null = samsaraResult.status === 'rejected'
+    ? null
+    : (samsaraRaw ?? []).map(r => ({
+        alertType: r.alert_type as SamsaraAlertType,
+        tier:      r.tier       as SamsaraTier,
+        count:     Number(r.count ?? 0),
+        lastAt:    (r.last_at as string | null) ?? null,
+      }))
+
   // Sort by severity desc, then started_at desc, take top 5
   const openContexts = ((openContextsRaw ?? []) as unknown as (MessageContext & { source?: Source })[])
     .sort((a, b) => {
@@ -176,14 +187,6 @@ async function getDashboardData() {
     toriBannerMessage = 'All systems nominal — no open situations or compliance flags. Connect your first source below to start monitoring your fleet communications.'
   }
 
-  // Per-source message count today
-  const msgCountBySource: Record<string, number> = {}
-  for (const msg of messagesTodayRaw ?? []) {
-    if (msg.source_id) {
-      msgCountBySource[msg.source_id] = (msgCountBySource[msg.source_id] ?? 0) + 1
-    }
-  }
-
   return {
     stats: {
       openSituations,
@@ -198,18 +201,15 @@ async function getDashboardData() {
     openContexts,
     recentAlerts: (recentAlertsRaw ?? []) as (Alert & { source?: Source })[],
     toriActivity: (toriActivityRaw ?? []) as ToriActivityLog[],
-    activeSources: (activeSourcesRaw ?? []).map((src) => ({
-      ...(src as Source),
-      messagesCount: msgCountBySource[src.id] ?? 0,
-    })),
     brainStatus: {
       kbRulesActive:  kbRulesActive ?? 0,
-      messagesToday:  messagesTodayRaw?.length ?? 0,
+      messagesToday:  brainMessagesToday ?? 0,
       contextsToday:  contextsTodayCount ?? 0,
       lastActivityAt: (lastMessageRow as { created_at: string } | null)?.created_at ?? null,
     },
     violationsToday,
     topViolatedRules,
+    samsaraBreakdown,
   }
 }
 
