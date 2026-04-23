@@ -357,19 +357,24 @@ function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
-        <div className="flex items-center gap-2">
-          <ShieldAlert size={13} style={{ color: 'var(--severity-critical)' }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Top Violated Rules · {labels.tileSuffix}
+      <div className="flex items-start justify-between" style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="flex flex-col" style={{ gap: 2 }}>
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={13} style={{ color: 'var(--severity-critical)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Top Violated Rules · {labels.tileSuffix}
+            </span>
+            <span
+              title={`Rules ranked by how often Tori matched them against incoming situations during ${labels.sub.toLowerCase()}.`}
+              style={{
+                width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'default', flexShrink: 0,
+              }}
+            >?</span>
+          </div>
+          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500, paddingLeft: 21 }}>
+            A situation can match multiple rules
           </span>
-          <span
-            title={`Rules ranked by how often Tori matched them against incoming situations during ${labels.sub.toLowerCase()}.`}
-            style={{
-              width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'default', flexShrink: 0,
-            }}
-          >?</span>
         </div>
         <Link href="/knowledge-base" className="flex items-center gap-1" style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
           View all <ChevronRight size={11} />
