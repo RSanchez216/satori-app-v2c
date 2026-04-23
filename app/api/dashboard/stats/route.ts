@@ -21,6 +21,8 @@ export async function GET(req: Request) {
     const supabase = createAdminClient()
     const from = fromParam ?? getChicagoMidnightISO()
     const to   = toParam   ?? null   // null = no upper bound (live "today" view)
+    // Brain Status is a snapshot tile — always reads "today CT", never the request window
+    const brainTodayMidnight = getChicagoMidnightISO()
 
     const [
       { data: openContextsRaw },
@@ -29,10 +31,11 @@ export async function GET(req: Request) {
       { data: recentAlertsRaw },
       { data: activeSourcesRaw },
       { data: toriActivityRaw },
-      { count: kbRulesCount },
+      { count: kbRulesActive },
       { data: messagesTodayRaw },
-      { count: contextsTodayCount },
-      { count: activeTopicsCount },
+      { count: brainContextsToday },
+      { count: brainMessagesToday },
+      { data: lastMessageRow },
       violationsSummaryResult,
       topRulesResult,
     ] = await Promise.all([
@@ -99,7 +102,7 @@ export async function GET(req: Request) {
 
       supabase
         .from('knowledge_base_rules')
-        .select('id', { count: 'exact', head: true })
+        .select('*', { count: 'exact', head: true })
         .eq('is_active', true),
 
       (() => {
@@ -111,19 +114,24 @@ export async function GET(req: Request) {
         return q
       })(),
 
-      (() => {
-        let q = supabase
-          .from('message_contexts')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', from)
-        if (to) q = q.lt('created_at', to)
-        return q
-      })(),
+      // Brain Status — always today CT, ignores request range
+      supabase
+        .from('message_contexts')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', brainTodayMidnight),
+
+      // Brain Status — always today CT, ignores request range
+      supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', brainTodayMidnight),
 
       supabase
-        .from('ai_topics')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true),
+        .from('messages')
+        .select('created_at')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
 
       supabase.rpc('get_violations_summary', { p_start: from, p_end: to ?? new Date().toISOString() }).single(),
       supabase.rpc('get_top_violated_rules', { p_start: from, p_end: to ?? new Date().toISOString(), p_limit: 10 }),
@@ -206,10 +214,10 @@ export async function GET(req: Request) {
       toriActivity: toriActivityRaw ?? [],
       activeSources,
       brainStatus: {
-        kbRulesActive:  kbRulesCount    ?? 0,
-        messagesCount:  messagesTodayRaw?.length ?? 0,
-        contextsBuilt:  contextsTodayCount ?? 0,
-        topicsTracked:  activeTopicsCount  ?? 0,
+        kbRulesActive:  kbRulesActive       ?? 0,
+        messagesToday:  brainMessagesToday  ?? 0,
+        contextsToday:  brainContextsToday  ?? 0,
+        lastActivityAt: (lastMessageRow as { created_at: string } | null)?.created_at ?? null,
       },
       violationsToday,
       topViolatedRules,

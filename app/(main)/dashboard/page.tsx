@@ -44,10 +44,10 @@ async function getDashboardData() {
     { data: recentAlertsRaw },
     { data: activeSourcesRaw },
     { data: toriActivityRaw },
-    { count: kbRulesCount },
+    { count: kbRulesActive },
     { data: messagesTodayRaw },
     { count: contextsTodayCount },
-    { count: activeTopicsCount },
+    { data: lastMessageRow },
   ] = await Promise.all([
     supabase
       .from('message_contexts')
@@ -89,7 +89,7 @@ async function getDashboardData() {
 
     supabase
       .from('knowledge_base_rules')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .eq('is_active', true),
 
     supabase
@@ -99,13 +99,15 @@ async function getDashboardData() {
 
     supabase
       .from('message_contexts')
-      .select('id', { count: 'exact', head: true })
+      .select('*', { count: 'exact', head: true })
       .gte('created_at', todayMidnight),
 
     supabase
-      .from('ai_topics')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true),
+      .from('messages')
+      .select('created_at')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ])
 
   // KB tile RPCs — non-fatal, graceful degradation. Initial SSR uses Today;
@@ -201,10 +203,10 @@ async function getDashboardData() {
       messagesCount: msgCountBySource[src.id] ?? 0,
     })),
     brainStatus: {
-      kbRulesActive: kbRulesCount    ?? 0,
-      messagesCount: messagesTodayRaw?.length ?? 0,
-      contextsBuilt: contextsTodayCount ?? 0,
-      topicsTracked: activeTopicsCount  ?? 0,
+      kbRulesActive:  kbRulesActive ?? 0,
+      messagesToday:  messagesTodayRaw?.length ?? 0,
+      contextsToday:  contextsTodayCount ?? 0,
+      lastActivityAt: (lastMessageRow as { created_at: string } | null)?.created_at ?? null,
     },
     violationsToday,
     topViolatedRules,

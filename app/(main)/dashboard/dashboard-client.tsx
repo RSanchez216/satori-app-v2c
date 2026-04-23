@@ -22,7 +22,12 @@ interface Props {
   recentAlerts: (Alert & { source?: Source })[]
   toriActivity: ToriActivityLog[]
   activeSources: (Source & { messagesCount: number })[]
-  brainStatus: { kbRulesActive: number; messagesCount: number; contextsBuilt: number; topicsTracked: number }
+  brainStatus: {
+    kbRulesActive:  number
+    messagesToday:  number
+    contextsToday:  number
+    lastActivityAt: string | null
+  }
   violationsToday:    ViolationsSummary | null
   topViolatedRules:   TopRule[]
 }
@@ -1069,45 +1074,42 @@ export function DashboardClient(initialData: Props) {
           </div>
 
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <BrainRow label="KB Rules Active"  value={brainStatus.kbRulesActive}  color="var(--accent)" />
-            <BrainRow label="Messages Today"   value={brainStatus.messagesCount}  color="var(--severity-low)" />
-            <BrainRow label="Contexts Built"   value={brainStatus.contextsBuilt}  color="var(--accent)" />
+            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="var(--accent)" accent />
+            <BrainRow label="Messages Today"  value={brainStatus.messagesToday} color="var(--severity-low)" accent />
+            <BrainRow label="Contexts Today"  value={brainStatus.contextsToday} color="var(--accent)" accent />
             <BrainRow
               label="Topics Tracked"
-              value={brainStatus.topicsTracked}
-              color="var(--severity-high)"
-              accent={brainStatus.topicsTracked > 0}
+              value="—"
+              color="var(--text-muted)"
+              tooltip="Topic generation not yet active"
             />
 
-            {/* Mini activity bar */}
-            <div style={{ marginTop: 4 }}>
-              <div
-                style={{
-                  height: 3,
-                  borderRadius: 2,
-                  background: 'var(--border-subtle)',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${Math.min(100, (brainStatus.messagesCount / 100) * 100)}%`,
-                    background: 'linear-gradient(90deg, var(--accent), rgba(var(--accent-rgb),0.5))',
-                    borderRadius: 2,
-                    transition: 'width 1s ease-out',
-                  }}
-                />
-              </div>
-              <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 5, fontWeight: 500 }}>
-                {brainStatus.messagesCount} messages processed today
-              </p>
-            </div>
+            {/* Last-activity footer */}
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontWeight: 500 }}>
+              Last activity: <LastActivity at={brainStatus.lastActivityAt} />
+            </p>
           </div>
         </div>
       </div>
     </div>
   )
+}
+
+/* ─── Last-activity ticker ──────────────────────────────────────────────── */
+function LastActivity({ at }: { at: string | null }) {
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+  if (!at) return <>—</>
+  const mins = Math.round((Date.now() - new Date(at).getTime()) / 60_000)
+  if (mins < 1)  return <>just now</>
+  if (mins < 60) return <>{mins} min ago</>
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return <>{hours} {hours === 1 ? 'hour' : 'hours'} ago</>
+  const days = Math.round(hours / 24)
+  return <>{days} {days === 1 ? 'day' : 'days'} ago</>
 }
 
 /* ─── Sub-components ─────────────────────────────────────────────────────── */
@@ -1117,21 +1119,27 @@ function BrainRow({
   value,
   color,
   accent,
+  tooltip,
 }: {
   label: string
-  value: number
+  value: number | string
   color: string
   accent?: boolean
+  tooltip?: string
 }) {
+  const isNumeric = typeof value === 'number'
+  const live = accent && isNumeric && value > 0
   return (
     <div className="flex items-center justify-between">
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
       <span
+        title={tooltip}
         style={{
           fontSize: 14,
           fontWeight: 800,
-          color: accent && value > 0 ? color : 'var(--text-muted)',
+          color: live ? color : 'var(--text-muted)',
           letterSpacing: '-0.02em',
+          cursor: tooltip ? 'help' : 'default',
         }}
       >
         {value}
