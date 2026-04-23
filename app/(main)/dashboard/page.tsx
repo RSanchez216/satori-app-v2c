@@ -33,6 +33,14 @@ export type TopRule = {
   count:    number
 }
 
+export type HealthScore = {
+  score:         number
+  scorePrevious: number
+  counts:        { critical: number; high: number; medium: number; low: number }
+  penalties:     { critical: number; high: number; medium: number; low: number }
+  totalCount:    number
+}
+
 async function getDashboardData() {
   const supabase = createClient()
   const todayMidnight = getChicagoMidnightISO()
@@ -105,12 +113,13 @@ async function getDashboardData() {
       .maybeSingle(),
   ])
 
-  // KB tile RPCs — non-fatal, graceful degradation. Initial SSR uses Today;
+  // Range-driven RPCs — non-fatal, graceful degradation. Initial SSR uses Today;
   // client re-fetches via /api/dashboard/stats when the range changes.
-  const [violationsSummaryResult, topRulesResult, samsaraResult] = await Promise.allSettled([
+  const [violationsSummaryResult, topRulesResult, samsaraResult, healthResult] = await Promise.allSettled([
     supabase.rpc('get_violations_summary', { p_start: todayMidnight, p_end: nowISO }).single(),
     supabase.rpc('get_top_violated_rules', { p_start: todayMidnight, p_end: nowISO, p_limit: 10 }),
     supabase.rpc('get_samsara_alert_breakdown', { p_start: todayMidnight, p_end: nowISO }),
+    supabase.rpc('get_health_score', { p_start: todayMidnight, p_end: nowISO }).single(),
   ])
 
   const violationsSummaryRaw = violationsSummaryResult.status === 'fulfilled'
@@ -159,6 +168,30 @@ async function getDashboardData() {
         lastAt:    (r.last_at as string | null) ?? null,
       }))
 
+  const healthRaw = healthResult.status === 'fulfilled'
+    ? (healthResult.value.data as unknown as Record<string, unknown> | null)
+    : null
+  if (healthResult.status === 'fulfilled' && healthResult.value.error) {
+    console.error('[dashboard] get_health_score:', healthResult.value.error)
+  }
+  const healthScore: HealthScore = healthRaw ? {
+    score:         Number(healthRaw.score          ?? 100),
+    scorePrevious: Number(healthRaw.score_previous ?? 100),
+    counts: {
+      critical: Number(healthRaw.critical_count ?? 0),
+      high:     Number(healthRaw.high_count     ?? 0),
+      medium:   Number(healthRaw.medium_count   ?? 0),
+      low:      Number(healthRaw.low_count      ?? 0),
+    },
+    penalties: {
+      critical: Number(healthRaw.critical_penalty ?? 0),
+      high:     Number(healthRaw.high_penalty     ?? 0),
+      medium:   Number(healthRaw.medium_penalty   ?? 0),
+      low:      Number(healthRaw.low_penalty      ?? 0),
+    },
+    totalCount:    Number(healthRaw.total_count ?? 0),
+  } : { score: 100, scorePrevious: 100, counts: { critical: 0, high: 0, medium: 0, low: 0 }, penalties: { critical: 0, high: 0, medium: 0, low: 0 }, totalCount: 0 }
+
   // Sort by severity desc, then started_at desc, take top 5
   const openContexts = ((openContextsRaw ?? []) as unknown as (MessageContext & { source?: Source })[])
     .sort((a, b) => {
@@ -168,13 +201,14 @@ async function getDashboardData() {
     })
     .slice(0, 5)
 
-  // Health score
+  // Open-alerts breakdown — drives the Tori banner copy and the
+  // criticalAlerts/highAlerts/mediumAlerts surface fields. Health Score
+  // itself comes from get_health_score (operations health, Samsara excluded).
   const openAlerts = openAlertsRaw ?? []
   const criticalCount = openAlerts.filter((a) => a.severity === 'critical').length
   const highCount     = openAlerts.filter((a) => a.severity === 'high').length
   const mediumCount   = openAlerts.filter((a) => a.severity === 'medium').length
   const kbViolations  = openAlerts.filter((a) => a.is_kb_violation).length
-  const healthScore   = Math.max(0, 100 - criticalCount * 25 - highCount * 10 - mediumCount * 3)
   const openSituations = openContexts.length
 
   // Tori banner
@@ -191,7 +225,7 @@ async function getDashboardData() {
     stats: {
       openSituations,
       resolvedToday: resolvedTodayCount ?? 0,
-      healthScore,
+      healthScore:   Math.round(healthScore.score),
       kbViolations,
       criticalAlerts: criticalCount,
       highAlerts:     highCount,
@@ -210,6 +244,7 @@ async function getDashboardData() {
     violationsToday,
     topViolatedRules,
     samsaraBreakdown,
+    healthScore,
   }
 }
 

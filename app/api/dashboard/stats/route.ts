@@ -37,6 +37,7 @@ export async function GET(req: Request) {
       violationsSummaryResult,
       topRulesResult,
       samsaraResult,
+      healthResult,
     ] = await Promise.all([
       (() => {
         let q = supabase
@@ -121,6 +122,7 @@ export async function GET(req: Request) {
       supabase.rpc('get_violations_summary', { p_start: from, p_end: to ?? new Date().toISOString() }).single(),
       supabase.rpc('get_top_violated_rules', { p_start: from, p_end: to ?? new Date().toISOString(), p_limit: 10 }),
       supabase.rpc('get_samsara_alert_breakdown', { p_start: from, p_end: to ?? new Date().toISOString() }),
+      supabase.rpc('get_health_score', { p_start: from, p_end: to ?? new Date().toISOString() }).single(),
     ])
 
     // Sort open contexts by severity desc, then started_at desc, take top 5
@@ -132,14 +134,34 @@ export async function GET(req: Request) {
       })
       .slice(0, 5)
 
-    // Health score
+    // Open-alerts breakdown — drives the Tori banner and the criticalAlerts/etc.
+    // surface fields. Health Score itself comes from get_health_score below.
     const openAlerts = openAlertsRaw ?? []
     const criticalCount = openAlerts.filter((a) => a.severity === 'critical').length
     const highCount     = openAlerts.filter((a) => a.severity === 'high').length
     const mediumCount   = openAlerts.filter((a) => a.severity === 'medium').length
     const kbViolations  = openAlerts.filter((a) => a.is_kb_violation).length
-    const healthScore   = Math.max(0, 100 - criticalCount * 25 - highCount * 10 - mediumCount * 3)
     const openSituations = openContexts.length
+
+    const healthRaw = healthResult.data as unknown as Record<string, unknown> | null
+    const healthScore = healthRaw ? {
+      score:         Number(healthRaw.score          ?? 100),
+      scorePrevious: Number(healthRaw.score_previous ?? 100),
+      counts: {
+        critical: Number(healthRaw.critical_count ?? 0),
+        high:     Number(healthRaw.high_count     ?? 0),
+        medium:   Number(healthRaw.medium_count   ?? 0),
+        low:      Number(healthRaw.low_count      ?? 0),
+      },
+      penalties: {
+        critical: Number(healthRaw.critical_penalty ?? 0),
+        high:     Number(healthRaw.high_penalty     ?? 0),
+        medium:   Number(healthRaw.medium_penalty   ?? 0),
+        low:      Number(healthRaw.low_penalty      ?? 0),
+      },
+      totalCount:    Number(healthRaw.total_count ?? 0),
+    } : { score: 100, scorePrevious: 100, counts: { critical: 0, high: 0, medium: 0, low: 0 }, penalties: { critical: 0, high: 0, medium: 0, low: 0 }, totalCount: 0 }
+    if (healthResult.error) console.error('[dashboard/stats] health_score:', healthResult.error)
 
     // Tori banner
     let toriBannerMessage: string
@@ -185,7 +207,7 @@ export async function GET(req: Request) {
       stats: {
         openSituations,
         resolvedToday: resolvedTodayCount ?? 0,
-        healthScore,
+        healthScore:   Math.round(healthScore.score),
         kbViolations,
         criticalAlerts: criticalCount,
         highAlerts:     highCount,
@@ -204,6 +226,7 @@ export async function GET(req: Request) {
       violationsToday,
       topViolatedRules,
       samsaraBreakdown,
+      healthScore,
     })
   } catch (err) {
     console.error('[dashboard/stats]', err)

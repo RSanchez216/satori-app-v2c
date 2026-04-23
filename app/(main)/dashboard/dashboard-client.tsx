@@ -13,7 +13,7 @@ import { SeverityBadge } from '@/components/ui/severity-badge'
 import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
 import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
-import type { ViolationsSummary, TopRule } from './page'
+import type { ViolationsSummary, TopRule, HealthScore } from './page'
 
 export type SamsaraTier = 'critical' | 'high' | 'operational' | 'info'
 export type SamsaraAlertType =
@@ -44,6 +44,7 @@ interface Props {
   violationsToday:    ViolationsSummary | null
   topViolatedRules:   TopRule[]
   samsaraBreakdown:   SamsaraRow[] | null
+  healthScore:        HealthScore
 }
 
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
@@ -104,48 +105,40 @@ function StatCard({
 }
 
 /* ─── Health Ring ───────────────────────────────────────────────────────── */
-function HealthRing({
-  score,
-  criticalAlerts,
-  highAlerts,
-  mediumAlerts,
-}: {
-  score: number
-  criticalAlerts: number
-  highAlerts: number
-  mediumAlerts: number
-}) {
+function HealthRing({ data, range }: { data: HealthScore; range: DateRange }) {
   const size = 200
   const cx   = 100
   const cy   = 100
   const r    = 82
   const sw   = 13                           // stroke width
   const circ = 2 * Math.PI * r
+
+  const score = Math.round(data.score)
   const offset = circ - (score / 100) * circ
 
   const color = score >= 90 ? '#16a34a' : score >= 70 ? '#e3b341' : '#f85149'
-  const label = score >= 90 ? 'NOMINAL'  : score >= 70 ? 'CAUTION' : 'CRITICAL'
   const statusText = score >= 90
-    ? 'Operations nominal'
+    ? 'Nominal — operations healthy'
     : score >= 70
-    ? 'Attention needed'
+    ? 'Caution — monitor'
     : 'Critical — review required'
 
-  // Deduction lines
-  const deductions: string[] = []
-  if (criticalAlerts > 0) deductions.push(`−${criticalAlerts * 25} pts · ${criticalAlerts} critical alert${criticalAlerts !== 1 ? 's' : ''}`)
-  if (highAlerts     > 0) deductions.push(`−${highAlerts * 10} pts · ${highAlerts} high alert${highAlerts !== 1 ? 's' : ''}`)
-  if (mediumAlerts   > 0) deductions.push(`−${mediumAlerts * 3} pts · ${mediumAlerts} medium alert${mediumAlerts !== 1 ? 's' : ''}`)
+  const delta = score - Math.round(data.scorePrevious)
+  const deltaLabel = rangeLabels(range).delta
+
+  // Penalty breakdown — only severities with count > 0
+  type PenaltyRow = { sev: 'critical' | 'high' | 'medium' | 'low'; count: number; pts: number }
+  const breakdown: PenaltyRow[] = (['critical', 'high', 'medium', 'low'] as const)
+    .filter(sev => data.counts[sev] > 0)
+    .map(sev => ({ sev, count: data.counts[sev], pts: data.penalties[sev] }))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' }}>
 
       {/* SVG gauge */}
       <div style={{ position: 'relative', width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          {/* Track */}
           <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--border-subtle)" strokeWidth={sw} />
-          {/* Progress arc */}
           <circle
             cx={cx} cy={cy} r={r}
             fill="none"
@@ -157,12 +150,12 @@ function HealthRing({
             transform={`rotate(-90 ${cx} ${cy})`}
             style={{ transition: 'stroke-dashoffset 1.2s ease-out', filter: `drop-shadow(0 0 10px ${color}88)` }}
           />
-          {/* Score number */}
+          {/* Score number — band-colored */}
           <text
-            x={cx} y={cy - 12}
+            x={cx} y={cy}
             textAnchor="middle"
             dominantBaseline="central"
-            fontSize="48"
+            fontSize="58"
             fontWeight="900"
             fill={color}
             fontFamily="inherit"
@@ -170,24 +163,22 @@ function HealthRing({
           >
             {score}
           </text>
-          {/* NOMINAL / CAUTION / CRITICAL label */}
-          <text
-            x={cx} y={cy + 24}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize="13"
-            fontWeight="700"
-            fill="var(--text-muted)"
-            fontFamily="inherit"
-            style={{ letterSpacing: '0.1em' }}
-          >
-            {label}
-          </text>
         </svg>
       </div>
 
+      {/* Trend delta pill */}
+      <div style={{ fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+        {delta === 0 ? (
+          <><Minus size={10} style={{ color: 'var(--text-muted)' }} /><span style={{ color: 'var(--text-muted)' }}>no change {deltaLabel}</span></>
+        ) : delta > 0 ? (
+          <><ArrowUp size={10} style={{ color: 'var(--severity-low)' }} /><span style={{ color: 'var(--severity-low)' }}>{delta} {deltaLabel}</span></>
+        ) : (
+          <><ArrowDown size={10} style={{ color: 'var(--severity-critical)' }} /><span style={{ color: 'var(--severity-critical)' }}>{Math.abs(delta)} {deltaLabel}</span></>
+        )}
+      </div>
+
       {/* Status text */}
-      <p style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
+      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
         {statusText}
       </p>
 
@@ -196,7 +187,7 @@ function HealthRing({
         {[
           { color: '#16a34a', label: '90–100 Nominal' },
           { color: '#e3b341', label: '70–89 Caution'  },
-          { color: '#f85149', label: '0–69 Critical'   },
+          { color: '#f85149', label: '0–69 Critical'  },
         ].map((b) => (
           <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: b.color, display: 'inline-block', flexShrink: 0 }} />
@@ -205,14 +196,21 @@ function HealthRing({
         ))}
       </div>
 
-      {/* Deductions or all-clear */}
-      {deductions.length === 0 ? (
-        <p style={{ fontSize: 12, fontWeight: 600, color: '#16a34a', margin: 0 }}>✓ No open alerts</p>
+      {/* Penalty breakdown */}
+      {data.totalCount === 0 ? (
+        <p style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', margin: 0, textAlign: 'center' }}>
+          No alert-worthy contexts in this window.
+        </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-          {deductions.map((d) => (
-            <p key={d} style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500, margin: 0 }}>{d}</p>
-          ))}
+          {breakdown.map(row => {
+            const ptsLabel = Number.isInteger(row.pts) ? row.pts.toString() : row.pts.toFixed(2)
+            return (
+              <p key={row.sev} style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500, margin: 0 }}>
+                −{ptsLabel} pts · {row.count} {row.sev} context{row.count !== 1 ? 's' : ''}
+              </p>
+            )
+          })}
         </div>
       )}
     </div>
@@ -606,7 +604,7 @@ export function DashboardClient(initialData: Props) {
     setDateRange(range)
   }
 
-  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, brainStatus, violationsToday, topViolatedRules, samsaraBreakdown } = data
+  const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, brainStatus, violationsToday, topViolatedRules, samsaraBreakdown, healthScore } = data
   const today = format(new Date(), 'EEEE, MMMM d')
   const labels = rangeLabels(dateRange)
   const resolvedLabel = dateRange.preset === 'today' ? 'Resolved Today' : 'Resolved'
@@ -835,8 +833,8 @@ export function DashboardClient(initialData: Props) {
           label="Health Score"
           value={`${stats.healthScore}%`}
           icon={Activity}
-          glowColor={stats.healthScore >= 80 ? '#56d364' : stats.healthScore >= 60 ? '#e3b341' : '#f85149'}
-          subtext="Fleet operations"
+          glowColor={stats.healthScore >= 90 ? '#56d364' : stats.healthScore >= 70 ? '#e3b341' : '#f85149'}
+          subtext="Operations health"
         />
         <StatCard
           label="KB Violations"
@@ -1078,20 +1076,28 @@ export function DashboardClient(initialData: Props) {
 
         {/* Health ring */}
         <div
-          className="rounded-xl flex flex-col items-center justify-center"
+          className="rounded-xl flex flex-col"
           style={{
             background: 'var(--bg-surface)',
             border: '1px solid var(--border-subtle)',
-            padding: '24px 20px',
-            gap: 0,
+            padding: '14px 20px 20px',
+            gap: 12,
           }}
         >
-          <HealthRing
-            score={stats.healthScore}
-            criticalAlerts={stats.criticalAlerts}
-            highAlerts={stats.highAlerts}
-            mediumAlerts={stats.mediumAlerts}
-          />
+          <div className="flex items-center gap-2">
+            <Activity size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Operations health
+            </span>
+            <span
+              title="Penalty-based score from AI-analyzed situations requiring attention. Samsara telematics alerts are tracked separately in the Samsara Alerts tile."
+              style={{
+                width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'help', flexShrink: 0,
+              }}
+            >?</span>
+          </div>
+          <HealthRing data={healthScore} range={dateRange} />
         </div>
 
         {/* Samsara alerts breakdown */}
