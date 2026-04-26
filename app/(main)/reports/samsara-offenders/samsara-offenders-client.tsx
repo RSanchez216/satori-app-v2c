@@ -222,12 +222,27 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
 
   return (
     <>
-      {/* Print-only styles */}
+      {/* Print-only + hover-tooltip styles */}
       <style>{`
         .print-only { display: none; }
+        .htip { position: relative; display: inline-flex; align-items: center; }
+        .htip-content {
+          position: absolute; bottom: calc(100% + 6px); left: 50%;
+          transform: translateX(-50%) translateY(2px);
+          background: var(--bg-elevated); border: 1px solid var(--border-default);
+          color: var(--text-primary); font-size: 11px; font-weight: 500;
+          padding: 6px 10px; border-radius: 6px;
+          white-space: pre-line; max-width: 280px; width: max-content;
+          text-align: left; pointer-events: none;
+          opacity: 0; transition: opacity 0.12s ease, transform 0.12s ease;
+          z-index: 50;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+        }
+        .htip:hover .htip-content { opacity: 1; transform: translateX(-50%) translateY(0); }
         @media print {
           .no-print { display: none !important; }
           .print-only { display: block !important; }
+          .htip-content { display: none !important; }
           /* Force accordion content visible in PDF regardless of expand state */
           .report-accordion-body { display: block !important; }
           body { background: #fff !important; }
@@ -340,16 +355,17 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                     <Th align="right">
                       <span className="inline-flex items-center gap-1">
                         Risk
-                        <span
-                          title={'Weighted score per driver:\n• Distraction events × 5\n• Speeding, Harsh Braking, DEF × 3\n• Engine Idle, Fuel Low × 1\n\nHigher score = higher risk profile.'}
-                          style={{
-                            width: 12, height: 12, borderRadius: '50%',
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 8, fontWeight: 800,
-                            background: 'var(--border-subtle)', color: 'var(--text-muted)',
-                            cursor: 'help', flexShrink: 0,
-                          }}
-                        >?</span>
+                        <HoverTip label={'Weighted score per driver:\n• Distraction events × 5\n• Speeding, Harsh Braking, DEF × 3\n• Engine Idle, Fuel Low × 1\n\nHigher score = higher risk profile.'}>
+                          <span
+                            style={{
+                              width: 12, height: 12, borderRadius: '50%',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 8, fontWeight: 800,
+                              background: 'var(--border-subtle)', color: 'var(--text-muted)',
+                              cursor: 'help', flexShrink: 0,
+                            }}
+                          >?</span>
+                        </HoverTip>
                       </span>
                     </Th>
                   </tr>
@@ -373,12 +389,13 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                         <Td align="right">{d.def || '—'}</Td>
                         <Td>
                           {d.alertTypesHit >= 3 ? (
-                            <span
-                              title={categoriesHit(d).join(' · ')}
-                              style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', cursor: 'help' }}
-                            >
-                              {d.alertTypesHit} types
-                            </span>
+                            <HoverTip label={categoriesHit(d).join(' · ')}>
+                              <span
+                                style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', cursor: 'help' }}
+                              >
+                                {d.alertTypesHit} types
+                              </span>
+                            </HoverTip>
                           ) : (
                             <span style={{ color: 'var(--text-muted)' }}>{d.alertTypesHit}</span>
                           )}
@@ -630,6 +647,20 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
 }
 
 /* ─── Small components ───────────────────────────────────────────────────── */
+
+/**
+ * Pure-CSS hover tooltip — instant on hover, consistent styling, no JS state
+ * or portal. Used wherever we'd otherwise reach for `title=""` (which has a
+ * ~1s OS delay and uses default OS styling that doesn't match the app).
+ */
+function HoverTip({ children, label }: { children: React.ReactNode; label: React.ReactNode }) {
+  return (
+    <span className="htip">
+      {children}
+      <span className="htip-content">{label}</span>
+    </span>
+  )
+}
 
 function KPI({ label, value, sub, valueColor }: { label: string; value: number | string; sub?: React.ReactNode; valueColor?: string }) {
   return (
