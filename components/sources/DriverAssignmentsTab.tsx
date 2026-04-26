@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, AlertTriangle, Trash2, Loader2, CheckCircle2 } from 'lucide-react'
+import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, AlertTriangle, Trash2, Loader2, CheckCircle2, ChevronUp, ChevronDown, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
@@ -185,20 +185,12 @@ export function DriverAssignmentsTab() {
   const [mapping,  setMapping]  = useState<ColumnMapping | null>(null)
   const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
 
-  // Summary counts + recent list (refreshed after each import)
+  // Summary counts + reload signal (table data lives inside IdleView)
   const [counts, setCounts] = useState<{ drivers: number; units: number; active: number } | null>(null)
-  const [recent, setRecent] = useState<Assignment[]>([])
+  const [reloadKey, setReloadKey] = useState(0)
   const [confirmClear, setConfirmClear] = useState(false)
 
   async function loadSummary() {
-    const { data: rows } = await supabase
-      .from('driver_unit_assignments')
-      .select('id, unit_id, driver_id, driver_name, start_date, end_date')
-      .order('start_date', { ascending: false })
-      .limit(10)
-
-    setRecent((rows ?? []) as Assignment[])
-
     // Aggregate counts via separate queries (small data; fine to do client-side)
     const [{ data: distinctDrivers }, { data: distinctUnits }, { count: activeCount }] = await Promise.all([
       supabase.from('driver_unit_assignments').select('driver_id'),
@@ -219,6 +211,7 @@ export function DriverAssignmentsTab() {
       units:   unitSet.size,
       active:  activeCount ?? 0,
     })
+    setReloadKey(k => k + 1)
   }
 
   useEffect(() => { loadSummary() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -332,7 +325,7 @@ export function DriverAssignmentsTab() {
       {stage === 'idle' && (
         <IdleView
           counts={counts}
-          recent={recent}
+          reloadKey={reloadKey}
           onFileSelected={onFileSelected}
           confirmClear={confirmClear}
           onRequestClear={() => setConfirmClear(true)}
@@ -375,17 +368,85 @@ export function DriverAssignmentsTab() {
 
 /* ─── Idle / empty state ─────────────────────────────────────────────────── */
 
+type SortCol = 'unit_id' | 'driver_name' | 'driver_id' | 'start_date' | 'end_date'
+const PAGE_SIZE = 25
+
 function IdleView({
-  counts, recent, onFileSelected, confirmClear, onRequestClear, onCancelClear, onClearAll,
+  counts, reloadKey, onFileSelected, confirmClear, onRequestClear, onCancelClear, onClearAll,
 }: {
   counts: { drivers: number; units: number; active: number } | null
-  recent: Assignment[]
+  reloadKey: number
   onFileSelected: (file: File) => void
   confirmClear: boolean
   onRequestClear: () => void
   onCancelClear: () => void
   onClearAll: () => void
 }) {
+  const [page,        setPage]        = useState(0)
+  const [searchInput, setSearchInput] = useState('')
+  const [search,      setSearch]      = useState('')   // debounced
+  const [activeOnly,  setActiveOnly]  = useState(false)
+  const [sortCol,     setSortCol]     = useState<SortCol>('start_date')
+  const [sortAsc,     setSortAsc]     = useState(false)
+  const [rows,        setRows]        = useState<Assignment[]>([])
+  const [total,       setTotal]       = useState(0)
+  const [loading,     setLoading]     = useState(false)
+
+  // Debounce: wait 250ms after typing stops before firing the query
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  // Reset to first page whenever a filter changes
+  useEffect(() => { setPage(0) }, [search, activeOnly, sortCol, sortAsc])
+
+  // Fetch page
+  useEffect(() => {
+    let cancelled = false
+    const supabase = createClient()
+    setLoading(true)
+
+    let q = supabase
+      .from('driver_unit_assignments')
+      .select('id, unit_id, driver_id, driver_name, start_date, end_date', { count: 'exact' })
+
+    if (search) {
+      // Server-side OR across all three searchable columns
+      q = q.or(`unit_id.ilike.%${search}%,driver_name.ilike.%${search}%,driver_id.ilike.%${search}%`)
+    }
+    if (activeOnly) {
+      q = q.or(`end_date.is.null,end_date.gt.${new Date().toISOString()}`)
+    }
+
+    q = q
+      .order(sortCol, { ascending: sortAsc })
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
+
+    q.then(({ data, count, error }) => {
+      if (cancelled) return
+      if (error) {
+        console.error('[driver-assignments] fetch failed:', error)
+        toast.error('Failed to load assignments: ' + error.message)
+      } else {
+        setRows((data ?? []) as Assignment[])
+        setTotal(count ?? 0)
+      }
+      setLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [page, search, activeOnly, sortCol, sortAsc, reloadKey])
+
+  function toggleSort(col: SortCol) {
+    if (col === sortCol) setSortAsc((v) => !v)
+    else { setSortCol(col); setSortAsc(false) }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const fromIdx    = total === 0 ? 0 : page * PAGE_SIZE + 1
+  const toIdx      = Math.min((page + 1) * PAGE_SIZE, total)
+
   return (
     <>
       {/* Summary + upload */}
@@ -478,32 +539,71 @@ function IdleView({
         </div>
       )}
 
-      {/* Recent assignments */}
+      {/* Assignments table */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-        <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border-subtle)' }}>
+        {/* Toolbar */}
+        <div
+          className="flex items-center gap-3 flex-wrap"
+          style={{ padding: '12px 18px', borderBottom: '1px solid var(--border-subtle)' }}
+        >
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-            Recent assignments {recent.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>· last {recent.length}</span>}
+            All Assignments {total > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({total.toLocaleString()})</span>}
           </span>
+
+          <div style={{ flex: 1, minWidth: 200, position: 'relative', marginLeft: 'auto', maxWidth: 360 }}>
+            <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by unit, driver, or ID…"
+              style={{
+                width: '100%',
+                padding: '6px 10px 6px 28px', borderRadius: 7, fontSize: 12,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                color: 'var(--text-primary)',
+              }}
+            />
+          </div>
+
+          <label className="flex items-center gap-1.5 cursor-pointer" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            <input
+              type="checkbox"
+              checked={activeOnly}
+              onChange={(e) => setActiveOnly(e.target.checked)}
+              style={{ accentColor: 'var(--accent)' }}
+            />
+            Active only
+          </label>
         </div>
-        {recent.length === 0 ? (
+
+        {/* Table */}
+        {loading && rows.length === 0 ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+            <Loader2 size={16} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite', margin: '0 auto 6px' }} />
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</p>
+          </div>
+        ) : rows.length === 0 ? (
           <div style={{ padding: '32px 20px', textAlign: 'center' }}>
             <FileSpreadsheet size={20} style={{ color: 'var(--text-muted)', margin: '0 auto 8px' }} />
-            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>No assignments yet — upload a file to get started.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {search || activeOnly ? 'No assignments match your filters.' : 'No assignments yet — upload a file to get started.'}
+            </p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
-                  <th style={thStyle}>Unit</th>
-                  <th style={thStyle}>Driver</th>
-                  <th style={thStyle}>Driver ID</th>
-                  <th style={thStyle}>Start</th>
-                  <th style={thStyle}>End</th>
+                  <SortableTh col="unit_id"     label="Unit"       sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
+                  <SortableTh col="driver_name" label="Driver"     sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
+                  <SortableTh col="driver_id"   label="Driver ID"  sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
+                  <SortableTh col="start_date"  label="Start"      sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
+                  <SortableTh col="end_date"    label="End"        sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
                 </tr>
               </thead>
               <tbody>
-                {recent.map((a) => (
+                {rows.map((a) => (
                   <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                     <td style={tdStyle}><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{a.unit_id}</span></td>
                     <td style={tdStyle}>{a.driver_name}</td>
@@ -516,9 +616,75 @@ function IdleView({
             </table>
           </div>
         )}
+
+        {/* Pagination */}
+        {total > 0 && (
+          <div
+            className="flex items-center gap-3 flex-wrap"
+            style={{ padding: '10px 18px', borderTop: '1px solid var(--border-subtle)' }}
+          >
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Showing {fromIdx.toLocaleString()}–{toIdx.toLocaleString()} of {total.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-1.5" style={{ marginLeft: 'auto' }}>
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                style={pagerBtnStyle(page === 0)}
+              >
+                ‹ Prev
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '0 6px' }}>
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page + 1 >= totalPages}
+                style={pagerBtnStyle(page + 1 >= totalPages)}
+              >
+                Next ›
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
+}
+
+function SortableTh({
+  col, label, sortCol, sortAsc, onClick,
+}: {
+  col: SortCol; label: string; sortCol: SortCol; sortAsc: boolean; onClick: (c: SortCol) => void
+}) {
+  const active = col === sortCol
+  return (
+    <th
+      onClick={() => onClick(col)}
+      style={{
+        ...thStyle,
+        cursor: 'pointer',
+        userSelect: 'none',
+        color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+      }}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        {active ? (sortAsc ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : null}
+      </span>
+    </th>
+  )
+}
+
+function pagerBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: 'transparent',
+    border: '1px solid var(--border-subtle)',
+    color: disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
+  }
 }
 
 /* ─── Mapper ─────────────────────────────────────────────────────────────── */
