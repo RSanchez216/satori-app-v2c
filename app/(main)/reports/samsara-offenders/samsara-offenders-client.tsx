@@ -20,10 +20,13 @@ export type OverviewData = {
   highCount:           number
   operationalCount:    number
   totalAlertsPrevious: number
+  unmappedDrivers:     number
 }
 
 export type DriverRow = {
   driverId:      string
+  driverName:    string | null
+  isResolved:    boolean
   totalAlerts:   number
   speeding:      number
   harshBrake:    number
@@ -34,6 +37,7 @@ export type DriverRow = {
   alertTypesHit: number
   lastAlertAt:   string
   riskScore:     number
+  unitsDriven:   string[]
 }
 
 export type UnitRow = {
@@ -43,11 +47,13 @@ export type UnitRow = {
   idleCount:          number
   totalAlerts:        number
   lastAlertAt:        string
+  drivers:            string[]
 }
 
 export type CriticalRow = {
   alertType:   'crash' | 'distraction' | 'severe_speeding'
   driverId:    string | null
+  driverName:  string | null
   unitId:      string | null
   messageFull: string
   occurredAt:  string
@@ -114,6 +120,23 @@ function cleanExcerpt(raw: string): string {
   return s
 }
 
+/**
+ * Display helper for an array of identifiers (units or driver names): show the
+ * first 3 inline, then a muted "+N more". A HoverTip wraps the whole element
+ * with the full list joined by ' · '.
+ */
+function ListPreview({ items, hover }: { items: string[]; hover?: string }) {
+  if (items.length === 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  const visible = items.slice(0, 3)
+  const remaining = items.length - visible.length
+  const inline = visible.join(', ') + (remaining > 0 ? ` +${remaining} more` : '')
+  return (
+    <HoverTip label={hover ?? items.join(' · ')}>
+      <span style={{ cursor: 'help' }}>{inline}</span>
+    </HoverTip>
+  )
+}
+
 function categoriesHit(d: DriverRow): string[] {
   // Priority order: highest-weighted categories first so the tooltip reads
   // "what risk this driver represents" not "every box ticked alphabetically".
@@ -141,21 +164,35 @@ function dominantDriverIssue(d: DriverRow): keyof typeof ALERT_LABELS {
   return counts[0].key
 }
 
+function driverDisplayForCoaching(d: DriverRow): string {
+  // Resolved: "Dzhovid Ochildiev (1830) on Unit M83" (most-driven unit shown when 1, else "Unit X+more")
+  // Unresolved: "Driver M83" (legacy fallback wording so the report still reads naturally)
+  if (d.isResolved && d.driverName) {
+    const unitClause =
+      d.unitsDriven.length === 1 ? ` on Unit ${d.unitsDriven[0]}`
+      : d.unitsDriven.length > 1  ? ` on Units ${d.unitsDriven.slice(0, 2).join(', ')}${d.unitsDriven.length > 2 ? '+more' : ''}`
+      : ''
+    return `${d.driverName} (${d.driverId})${unitClause}`
+  }
+  return `Driver ${d.driverId}`
+}
+
 function coachingForDriver(d: DriverRow): string {
-  const top = dominantDriverIssue(d)
+  const top  = dominantDriverIssue(d)
+  const who  = driverDisplayForCoaching(d)
   switch (top) {
     case 'distraction':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: distracted driving (${d.distraction} events). Recommend a 1:1 coaching session focused on phone use and inattention.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: distracted driving (${d.distraction} events). Recommend a 1:1 coaching session focused on phone use and inattention.`
     case 'speeding':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: speeding (${d.speeding} events). Recommend posted-limit refresher and a week of close monitoring.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: speeding (${d.speeding} events). Recommend posted-limit refresher and a week of close monitoring.`
     case 'harshBrake':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: harsh braking (${d.harshBrake} events). Recommend defensive-driving and following-distance coaching.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: harsh braking (${d.harshBrake} events). Recommend defensive-driving and following-distance coaching.`
     case 'def':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: DEF system (${d.def} events). Verify driver has been trained on DEF refill procedure.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: DEF system (${d.def} events). Verify driver has been trained on DEF refill procedure.`
     case 'idle':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: excessive idling (${d.idle} events). Review idle-reduction policy and route-planning habits.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: excessive idling (${d.idle} events). Review idle-reduction policy and route-planning habits.`
     case 'fuelLow':
-      return `Driver ${d.driverId} flagged ${d.totalAlerts} times — top issue: fuel-low warnings (${d.fuelLow} events). Coach on pre-trip inspections and fuel-stop planning.`
+      return `${who} flagged ${d.totalAlerts} times — top issue: fuel-low warnings (${d.fuelLow} events). Coach on pre-trip inspections and fuel-stop planning.`
   }
 }
 
@@ -331,6 +368,30 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
           <KPI label="Critical Tier"  value={overview?.criticalCount ?? 0} sub={<>crash + distraction</>} valueColor="var(--severity-critical)" />
         </div>
 
+        {/* Unmapped-drivers data-quality pill */}
+        {overview && overview.unmappedDrivers > 0 && (
+          <div
+            className="no-print flex items-center gap-2 rounded-lg"
+            style={{
+              padding: '8px 14px',
+              background: 'rgba(227,179,65,0.08)',
+              border: '1px solid rgba(227,179,65,0.25)',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <AlertTriangle size={13} style={{ color: 'var(--severity-high)' }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {overview.unmappedDrivers} unmapped driver{overview.unmappedDrivers === 1 ? '' : 's'} in this window
+            </span>
+            <a
+              href="/sources?tab=drivers"
+              style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', marginLeft: 4 }}
+            >
+              Manage →
+            </a>
+          </div>
+        )}
+
         {/* ── 1. Driver Watchlist ── */}
         <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <SectionHeader number="1" title="Driver Watchlist" subtitle="Top 10 drivers by risk score (distraction × 5 + speeding/harsh-brake/DEF × 3 + idle/fuel-low × 1)" icon={User} />
@@ -343,6 +404,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                   <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
                     <Th>#</Th>
                     <Th>Driver</Th>
+                    <Th>Unit(s)</Th>
                     <Th align="right">Total</Th>
                     <Th align="right">Speeding</Th>
                     <Th align="right">Harsh Brake</Th>
@@ -379,7 +441,19 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                         background: isWorst ? 'rgba(248,81,73,0.05)' : 'transparent',
                       }}>
                         <Td>{i + 1}</Td>
-                        <Td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{d.driverId}</span></Td>
+                        <Td>
+                          <div className="flex flex-col">
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {d.isResolved && d.driverName ? d.driverName : d.driverId}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: d.isResolved ? 'monospace' : 'inherit' }}>
+                              {d.isResolved && d.driverName ? d.driverId : 'unmapped'}
+                            </span>
+                          </div>
+                        </Td>
+                        <Td>
+                          <ListPreview items={d.unitsDriven} />
+                        </Td>
                         <Td align="right" bold>{d.totalAlerts}</Td>
                         <Td align="right">{d.speeding || '—'}</Td>
                         <Td align="right">{d.harshBrake || '—'}</Td>
@@ -430,6 +504,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                   <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
                     <Th>#</Th>
                     <Th>Unit</Th>
+                    <Th>Driver(s)</Th>
                     <Th align="right">Faults</Th>
                     <Th align="right">Distinct codes</Th>
                     <Th align="right">Idle</Th>
@@ -447,6 +522,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                       }}>
                         <Td>{i + 1}</Td>
                         <Td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{u.unitId}</span></Td>
+                        <Td><ListPreview items={u.drivers} /></Td>
                         <Td align="right" bold>{u.faultCount}</Td>
                         <Td align="right">
                           {u.faultCodesDistinct >= 5 ? (
@@ -556,9 +632,19 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                    Driver <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.driverId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
-                                      {c.driverId ?? '—'}
-                                    </span>
+                                    Driver{' '}
+                                    {c.driverName ? (
+                                      <>
+                                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{c.driverName}</span>
+                                        {c.driverId && (
+                                          <span style={{ fontFamily: 'monospace', color: 'var(--text-muted)', marginLeft: 4 }}>({c.driverId})</span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.driverId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                                        {c.driverId ?? '—'}
+                                      </span>
+                                    )}
                                   </span>
                                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                     Unit <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.unitId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>

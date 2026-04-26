@@ -1,16 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Plus, Send, Zap, BookOpen, Search, Pencil, X, Check,
   ChevronDown, MoreVertical, Volume2, VolumeX, Power,
   CheckCircle2, Trash2, Clock, Layers, Settings2, Radio,
+  Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { AddSourceModal } from '@/components/sources/AddSourceModal'
 import { EditDepartmentsPanel } from '@/components/sources/EditDepartmentsPanel'
+import { DriverAssignmentsTab } from '@/components/sources/DriverAssignmentsTab'
 import type { Source, Department } from '@/types/database'
 
 interface Props {
@@ -50,7 +52,13 @@ export function SourcesClient({
   const [showModal,   setShowModal]   = useState(false)
   const [showPanel,   setShowPanel]   = useState(false)
   const [newSourceId, setNewSourceId] = useState<string | null>(null)
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const activeTab: 'sources' | 'drivers' = searchParams.get('tab') === 'drivers' ? 'drivers' : 'sources'
+
+  function setActiveTab(tab: 'sources' | 'drivers') {
+    router.push(tab === 'sources' ? '/sources' : '/sources?tab=drivers')
+  }
 
   // Hydrate expanded from localStorage after mount
   useEffect(() => {
@@ -195,11 +203,42 @@ export function SourcesClient({
           >
             <Settings2 size={13} /> Departments
           </button>
-          <button className="btn-accent" onClick={() => setShowModal(true)}>
-            <Plus size={14} /> Add Source
-          </button>
+          {activeTab === 'sources' && (
+            <button className="btn-accent" onClick={() => setShowModal(true)}>
+              <Plus size={14} /> Add Source
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Tab strip */}
+      <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', alignSelf: 'flex-start' }}>
+        {([
+          { id: 'sources', label: 'Sources',            icon: Radio },
+          { id: 'drivers', label: 'Driver Assignments', icon: Users },
+        ] as const).map(t => {
+          const Icon   = t.icon
+          const active = activeTab === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className="flex items-center gap-2"
+              style={{
+                padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', border: 'none',
+                background: active ? 'var(--accent-dim)' : 'transparent',
+                color:      active ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+            >
+              <Icon size={13} />
+              {t.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {activeTab === 'drivers' ? <DriverAssignmentsTab /> : <>
 
       {/* Detected Groups Banner */}
       {detectedSources.length > 0 && (
@@ -275,6 +314,7 @@ export function SourcesClient({
           )}
         </div>
       )}
+      </>}
 
       {showModal && (
         <AddSourceModal

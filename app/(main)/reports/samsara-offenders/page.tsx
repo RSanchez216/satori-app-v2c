@@ -66,10 +66,13 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
     highCount:           Number((overviewRes.data as Record<string, unknown>).high_count ?? 0),
     operationalCount:    Number((overviewRes.data as Record<string, unknown>).operational_count ?? 0),
     totalAlertsPrevious: Number((overviewRes.data as Record<string, unknown>).total_alerts_previous ?? 0),
+    unmappedDrivers:     Number((overviewRes.data as Record<string, unknown>).unmapped_drivers ?? 0),
   } : null
 
   const drivers: DriverRow[] = (driversRes.data ?? []).map((r: Record<string, unknown>) => ({
     driverId:      r.driver_id as string,
+    driverName:    (r.driver_name as string | null) ?? null,
+    isResolved:    Boolean(r.is_resolved),
     totalAlerts:   Number(r.total_alerts ?? 0),
     speeding:      Number(r.speeding_count ?? 0),
     harshBrake:    Number(r.harsh_brake_count ?? 0),
@@ -80,6 +83,7 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
     alertTypesHit: Number(r.alert_types_hit ?? 0),
     lastAlertAt:   r.last_alert_at as string,
     riskScore:     Number(r.risk_score ?? 0),
+    unitsDriven:   (r.units_driven as string[] | null) ?? [],
   }))
 
   const units: UnitRow[] = (unitsRes.data ?? []).map((r: Record<string, unknown>) => ({
@@ -89,11 +93,13 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
     idleCount:          Number(r.idle_count ?? 0),
     totalAlerts:        Number(r.total_alerts ?? 0),
     lastAlertAt:        r.last_alert_at as string,
+    drivers:            (r.drivers as string[] | null) ?? [],
   }))
 
   const critical: CriticalRow[] = (criticalRes.data ?? []).map((r: Record<string, unknown>) => ({
     alertType:   r.alert_type as CriticalRow['alertType'],
     driverId:    (r.driver_id as string | null) ?? null,
+    driverName:  (r.driver_name as string | null) ?? null,
     unitId:      (r.unit_id as string | null) ?? null,
     messageFull: r.message_full as string,
     occurredAt:  r.occurred_at as string,
