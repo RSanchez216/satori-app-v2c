@@ -107,23 +107,41 @@ type NewAssignment = {
 const NA_VALUES = new Set(['n/a', 'na', '', 'null', 'none', '-'])
 
 /**
- * Parse a date from CSV (string) or Excel (serial number). XLSX stores dates
- * as days-since-1899-12-30 (accounting for Excel's 1900 leap-year bug). Strings
- * fall through to the standard JS Date parser.
+ * Parse a date from CSV (string) or Excel (serial number).
+ *
+ * Whole-day fields (no time component) are anchored at NOON UTC so that the
+ * Date object falls on the intended calendar day in every local timezone —
+ * no zone on Earth is more than 14 hours from UTC, so noon UTC is always
+ * "that day" regardless of viewer locale. `new Date('2026-04-26')` would
+ * land at midnight UTC, which displays as the previous day in Chicago.
  */
 function parseExcelDate(value: unknown): Date | null {
   if (value == null) return null
-  // Excel serial: a plain number in the realistic date range (1970–2100).
-  // 25569 ≈ 1970-01-01, 73415 ≈ 2100-12-31. Outside this window we treat
-  // the number as a non-date and bail.
+
+  // Excel serial: days since 1899-12-30 (Excel's 1900 leap-year bug accounted for).
+  // 25569 ≈ 1970-01-01, 73415 ≈ 2100-12-31. Outside the realistic date range,
+  // treat as a non-date so a stray Driver ID landing here doesn't get misread.
   if (typeof value === 'number') {
     if (value < 25000 || value > 80000) return null
-    const excelEpoch = Date.UTC(1899, 11, 30)
-    const d = new Date(excelEpoch + value * 86_400_000)
+    // Add 12h so we land at noon UTC of the intended day.
+    const excelEpoch = Date.UTC(1899, 11, 30, 12, 0, 0)
+    const d = new Date(excelEpoch + Math.trunc(value) * 86_400_000)
     return isNaN(d.getTime()) ? null : d
   }
+
   const trimmed = String(value).trim()
   if (!trimmed || NA_VALUES.has(trimmed.toLowerCase())) return null
+
+  // ISO YYYY-MM-DD: parse explicitly at noon UTC. `new Date('2026-04-26')`
+  // is spec'd as UTC midnight, which off-by-ones in any non-UTC timezone.
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (iso) {
+    const [, y, mo, d] = iso
+    return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), 12, 0, 0))
+  }
+
+  // Other string formats (MM/DD/YYYY, full RFC, etc.) — fall back to native
+  // parsing. These usually carry an explicit time so they're zone-safe.
   const d = new Date(trimmed)
   return isNaN(d.getTime()) ? null : d
 }
