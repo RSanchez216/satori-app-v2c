@@ -76,6 +76,37 @@ const ALERT_LABELS: Record<keyof Pick<DriverRow, 'speeding' | 'harshBrake' | 'id
   def:         { label: 'DEF',          icon: Wrench },
 }
 
+/**
+ * Samsara message excerpts come pre-collapsed (whitespace) but with markdown
+ * bold markers, emoji-prefixed fields, and a Telegram boilerplate header. This
+ * helper strips:
+ *   1. Everything up to and including "--- Original Message ---" (header noise)
+ *   2. `**` markdown bold markers
+ *   3. Emoji characters (the colored icon next to each event already conveys
+ *      the alert type — emoji in text is redundant)
+ *   4. Repeated whitespace and stray separators
+ * Each emoji becomes a ` · ` field separator since they typically prefix
+ * separate fields like `🚨 Severe Alert! 👤 Driver: X 🔺 Speed: Y`.
+ */
+function cleanExcerpt(raw: string): string {
+  let s = raw
+
+  const marker = '--- Original Message ---'
+  const idx = s.indexOf(marker)
+  if (idx >= 0) s = s.slice(idx + marker.length)
+
+  s = s.replace(/\*\*/g, '')
+  // Any non-ASCII run (covers all emoji surrogate pairs without needing the `u`
+  // flag, which isn't available at this project's TS target). Samsara messages
+  // are ASCII-only otherwise, so this is safe.
+  s = s.replace(/[^\x00-\x7F]+/g, ' · ')
+  s = s.replace(/\s+/g, ' ').trim()
+  s = s.replace(/^[·\s]+|[·\s]+$/g, '').trim()
+  s = s.replace(/(\s·\s){2,}/g, ' · ')
+
+  return s
+}
+
 function dominantDriverIssue(d: DriverRow): keyof typeof ALERT_LABELS {
   const counts: { key: keyof typeof ALERT_LABELS; n: number }[] = [
     { key: 'distraction', n: d.distraction },
@@ -391,7 +422,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                         </span>
                       </div>
                       <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-                        {c.messageExcerpt}
+                        {cleanExcerpt(c.messageExcerpt)}
                       </p>
                     </div>
                   </div>
