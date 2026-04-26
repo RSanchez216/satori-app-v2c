@@ -371,7 +371,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
         {/* Unmapped-drivers data-quality pill */}
         {overview && overview.unmappedDrivers > 0 && (
           <div
-            className="no-print flex items-center gap-2 rounded-lg"
+            className="no-print flex items-center gap-2 rounded-lg flex-wrap"
             style={{
               padding: '8px 14px',
               background: 'rgba(227,179,65,0.08)',
@@ -382,6 +382,9 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
             <AlertTriangle size={13} style={{ color: 'var(--severity-high)' }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
               {overview.unmappedDrivers} unmapped driver{overview.unmappedDrivers === 1 ? '' : 's'} in this window
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              · alerts may predate the assignment file or reference units not in the TMS export
             </span>
             <a
               href="/sources?tab=drivers"
