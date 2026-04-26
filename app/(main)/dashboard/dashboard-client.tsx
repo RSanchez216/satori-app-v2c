@@ -846,6 +846,69 @@ export function DashboardClient(initialData: Props) {
         <ViolationsCard data={violationsToday ?? null} range={dateRange} />
       </div>
 
+      {/* ── 3-col grid: Operations health · Samsara Alerts · Brain Status ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        {/* Health ring */}
+        <div
+          className="rounded-xl flex flex-col"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+            padding: '14px 20px 20px',
+            gap: 12,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Activity size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Operations health
+            </span>
+            <span
+              title="Penalty-based score from AI-analyzed situations requiring attention. Samsara telematics alerts are tracked separately in the Samsara Alerts tile."
+              style={{
+                width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'help', flexShrink: 0,
+              }}
+            >?</span>
+          </div>
+          <HealthRing data={healthScore} range={dateRange} />
+        </div>
+
+        {/* Samsara alerts breakdown */}
+        <SamsaraAlertsTile rows={samsaraBreakdown} range={dateRange} />
+
+        {/* Brain status */}
+        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+          <div
+            className="flex items-center gap-2"
+            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
+          >
+            <Brain size={13} style={{ color: 'var(--accent)' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              Brain Status
+            </span>
+          </div>
+
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="var(--accent)" accent />
+            <BrainRow label="Messages Today"  value={brainStatus.messagesToday} color="var(--severity-low)" accent />
+            <BrainRow label="Contexts Today"  value={brainStatus.contextsToday} color="var(--accent)" accent />
+            <BrainRow
+              label="Topics Tracked"
+              value="—"
+              color="var(--text-muted)"
+              tooltip="Topic generation not yet active"
+            />
+
+            {/* Last-activity footer */}
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontWeight: 500 }}>
+              Last activity: <LastActivity at={brainStatus.lastActivityAt} />
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* ── Top Violated Rules ── */}
       <TopViolatedRulesTile rules={topViolatedRules ?? null} range={dateRange} />
 
@@ -1071,68 +1134,6 @@ export function DashboardClient(initialData: Props) {
         </div>
       </div>
 
-      {/* ── Bottom 3-col grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {/* Health ring */}
-        <div
-          className="rounded-xl flex flex-col"
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
-            padding: '14px 20px 20px',
-            gap: 12,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Activity size={13} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              Operations health
-            </span>
-            <span
-              title="Penalty-based score from AI-analyzed situations requiring attention. Samsara telematics alerts are tracked separately in the Samsara Alerts tile."
-              style={{
-                width: 14, height: 14, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 9, fontWeight: 800, background: 'var(--border-subtle)', color: 'var(--text-muted)', cursor: 'help', flexShrink: 0,
-              }}
-            >?</span>
-          </div>
-          <HealthRing data={healthScore} range={dateRange} />
-        </div>
-
-        {/* Samsara alerts breakdown */}
-        <SamsaraAlertsTile rows={samsaraBreakdown} range={dateRange} />
-
-        {/* Brain status */}
-        <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <div
-            className="flex items-center gap-2"
-            style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
-          >
-            <Brain size={13} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              Brain Status
-            </span>
-          </div>
-
-          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <BrainRow label="KB Rules Active" value={brainStatus.kbRulesActive} color="var(--accent)" accent />
-            <BrainRow label="Messages Today"  value={brainStatus.messagesToday} color="var(--severity-low)" accent />
-            <BrainRow label="Contexts Today"  value={brainStatus.contextsToday} color="var(--accent)" accent />
-            <BrainRow
-              label="Topics Tracked"
-              value="—"
-              color="var(--text-muted)"
-              tooltip="Topic generation not yet active"
-            />
-
-            {/* Last-activity footer */}
-            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, fontWeight: 500 }}>
-              Last activity: <LastActivity at={brainStatus.lastActivityAt} />
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
