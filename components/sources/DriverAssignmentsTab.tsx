@@ -287,7 +287,8 @@ export function DriverAssignmentsTab() {
       await loadSummary()
     } catch (err) {
       console.error('[driver-import] insert failed:', err)
-      toast.error('Import failed — see console for details. You can retry without re-mapping.')
+      const msg = err instanceof Error ? err.message : 'unknown error'
+      toast.error(`Import failed: ${msg}`, { duration: 8000 })
       setStage('confirm')
       setImportProgress(null)
     }
