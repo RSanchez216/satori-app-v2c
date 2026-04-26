@@ -106,6 +106,28 @@ type NewAssignment = {
 
 const NA_VALUES = new Set(['n/a', 'na', '', 'null', 'none', '-'])
 
+/**
+ * Parse a date from CSV (string) or Excel (serial number). XLSX stores dates
+ * as days-since-1899-12-30 (accounting for Excel's 1900 leap-year bug). Strings
+ * fall through to the standard JS Date parser.
+ */
+function parseExcelDate(value: unknown): Date | null {
+  if (value == null) return null
+  // Excel serial: a plain number in the realistic date range (1970–2100).
+  // 25569 ≈ 1970-01-01, 73415 ≈ 2100-12-31. Outside this window we treat
+  // the number as a non-date and bail.
+  if (typeof value === 'number') {
+    if (value < 25000 || value > 80000) return null
+    const excelEpoch = Date.UTC(1899, 11, 30)
+    const d = new Date(excelEpoch + value * 86_400_000)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const trimmed = String(value).trim()
+  if (!trimmed || NA_VALUES.has(trimmed.toLowerCase())) return null
+  const d = new Date(trimmed)
+  return isNaN(d.getTime()) ? null : d
+}
+
 function normalizeRow(raw: Record<string, unknown>, mapping: ColumnMapping): NewAssignment | null {
   const unitRaw  = mapping.unit_id     ? raw[mapping.unit_id]     : null
   const drvIdRaw = mapping.driver_id   ? raw[mapping.driver_id]   : null
@@ -118,19 +140,14 @@ function normalizeRow(raw: Record<string, unknown>, mapping: ColumnMapping): New
   const driver_id = drvIdRaw != null ? String(drvIdRaw).trim() : ''
   const name      = drvName  != null ? String(drvName).trim()  : ''
 
-  if (!unit_id || !driver_id || !name || startRaw == null) return null
+  if (!unit_id || !driver_id || !name) return null
 
-  const start = new Date(String(startRaw))
-  if (isNaN(start.getTime())) return null
+  const start = parseExcelDate(startRaw)
+  if (!start) return null
 
-  let end: Date | null = null
-  if (endRaw != null) {
-    const trimmed = String(endRaw).trim()
-    if (trimmed && !NA_VALUES.has(trimmed.toLowerCase())) {
-      const parsed = new Date(trimmed)
-      if (!isNaN(parsed.getTime())) end = parsed
-    }
-  }
+  // end_date is optional; null means "still active". parseExcelDate already
+  // returns null for NA-style values, so the result feeds straight through.
+  const end = parseExcelDate(endRaw)
 
   return {
     unit_id,
