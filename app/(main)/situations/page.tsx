@@ -1,11 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { SituationsClient } from './situations-client'
-import type { SituationData } from '@/components/situations/SituationCard'
+import type { SituationData, KBViolationChip } from '@/components/situations/SituationCard'
 import type { AlertSeverity } from '@/types/database'
 
 export const dynamic = 'force-dynamic'
 
 const SEV_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 }
+
+/** UTC ISO string for midnight in Chicago time (handles DST). Matches Dashboard. */
+function getChicagoMidnightISO(): string {
+  const now = new Date()
+  const chicagoNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }))
+  const offsetMs = now.getTime() - chicagoNow.getTime()
+  const midnight = new Date(chicagoNow.getFullYear(), chicagoNow.getMonth(), chicagoNow.getDate())
+  return new Date(midnight.getTime() + offsetMs).toISOString()
+}
 
 function deriveStatus(aiStatus: string, alertWorthy: boolean): 'open' | 'resolved' | 'pending' {
   if (aiStatus === 'resolved') return 'resolved'
@@ -22,7 +31,10 @@ function deriveActiveStep(aiStatus: string, alertWorthy: boolean, kbFlagged: boo
 
 export default async function SituationsPage() {
   const supabase = createClient()
+  const todayMidnight = getChicagoMidnightISO()
 
+  // Page is scoped to today CT, matching how Dashboard KPIs count.
+  // (Date range selector is a follow-up ticket.)
   const [
     { data: contexts },
     { count: activeSourceCount },
@@ -39,6 +51,7 @@ export default async function SituationsPage() {
       `)
       .eq('build_status', 'ready')
       .neq('ai_status', 'failed')
+      .gte('created_at', todayMidnight)
       .order('created_at', { ascending: false })
       .limit(500),
 
@@ -52,43 +65,71 @@ export default async function SituationsPage() {
     ['done', 'resolved', 'pending'].includes(c.ai_status as string)
   )
 
-  // Fetch KB violation alerts for these contexts
+  // Fetch KB violations from the new pipeline (kb_violations + knowledge_base_rules)
+  // and group per context for chip rendering + KB Flagged count.
   const contextIds = valid.map((c) => c.id)
-  let kbAlerts: Array<{
+  type KBViolationRow = {
     context_id: string
-    knowledge_base_entry: { id: string; title: string; expected_outcome: string | null } | null
-  }> = []
-
-  if (contextIds.length > 0) {
-    const { data } = await supabase
-      .from('alerts')
-      .select('context_id, knowledge_base_entry:knowledge_base_entries(id, title, expected_outcome)')
-      .in('context_id', contextIds)
-      .eq('is_kb_violation', true)
-    // Supabase returns the FK join as an array; normalise to single object
-    kbAlerts = ((data ?? []) as unknown[]).map((row) => {
-      const r = row as Record<string, unknown>
-      const kbe = Array.isArray(r.knowledge_base_entry)
-        ? (r.knowledge_base_entry[0] ?? null)
-        : (r.knowledge_base_entry ?? null)
-      return { context_id: r.context_id as string, knowledge_base_entry: kbe as typeof kbAlerts[number]['knowledge_base_entry'] }
-    })
+    rule_id:    string
+    knowledge_base_rules: { title: string; severity: string } | null
   }
 
-  const kbMap = new Map<string, typeof kbAlerts[number]>()
-  for (const a of kbAlerts) {
-    if (a.context_id && !kbMap.has(a.context_id)) kbMap.set(a.context_id, a)
+  const kbByContext = new Map<string, KBViolationChip[]>()
+
+  if (contextIds.length > 0) {
+    const { data: kbRows } = await supabase
+      .from('kb_violations')
+      .select('context_id, rule_id, knowledge_base_rules(title, severity)')
+      .in('context_id', contextIds)
+
+    // Supabase returns the FK join as an object on a single FK, but as an array
+    // through the type system; normalise to a single object.
+    const rows: KBViolationRow[] = ((kbRows ?? []) as unknown[]).map((row) => {
+      const r = row as Record<string, unknown>
+      const rule = Array.isArray(r.knowledge_base_rules)
+        ? (r.knowledge_base_rules[0] ?? null)
+        : (r.knowledge_base_rules ?? null)
+      return {
+        context_id: r.context_id as string,
+        rule_id:    r.rule_id as string,
+        knowledge_base_rules: rule as KBViolationRow['knowledge_base_rules'],
+      }
+    })
+
+    for (const row of rows) {
+      const chip: KBViolationChip = {
+        rule_id:  row.rule_id,
+        title:    row.knowledge_base_rules?.title ?? row.rule_id,
+        severity: (row.knowledge_base_rules?.severity ?? 'low') as AlertSeverity,
+      }
+      const list = kbByContext.get(row.context_id) ?? []
+      list.push(chip)
+      kbByContext.set(row.context_id, list)
+    }
+
+    // Sort each context's chips by severity desc, then title asc
+    Array.from(kbByContext.keys()).forEach((cid) => {
+      const list = kbByContext.get(cid)!
+      list.sort((a: KBViolationChip, b: KBViolationChip) => {
+        const sd = (SEV_ORDER[b.severity] ?? 0) - (SEV_ORDER[a.severity] ?? 0)
+        if (sd !== 0) return sd
+        return a.title.localeCompare(b.title)
+      })
+    })
   }
 
   // Map to SituationData
   const situations: SituationData[] = valid.map((ctx) => {
-    const kbAlert   = kbMap.get(ctx.id) ?? null
-    const kbFlagged = !!kbAlert
-    const status    = deriveStatus(ctx.ai_status as string, ctx.alert_worthy as boolean)
-    const resolvedAt = status === 'resolved' ? (ctx.updated_at as string) : null
+    const kbViolations = kbByContext.get(ctx.id as string) ?? []
+    const kbFlagged    = kbViolations.length > 0
+    const status       = deriveStatus(ctx.ai_status as string, ctx.alert_worthy as boolean)
+    const resolvedAt   = status === 'resolved' ? (ctx.updated_at as string) : null
 
     const rawTitle = (ctx.topic_name as string | null) ?? (ctx.summary as string | null) ?? ''
     const title    = rawTitle.length > 70 ? rawTitle.slice(0, 67) + '…' : rawTitle || 'Unnamed Situation'
+
+    // Top-violation derived fields kept for the existing KBViolationBanner
+    const topViolation = kbViolations[0] ?? null
 
     return {
       id:                  ctx.id as string,
@@ -105,8 +146,10 @@ export default async function SituationsPage() {
       primary_sender:      ctx.primary_sender as string | null,
       kb_flagged:          kbFlagged,
       kb_outcome_met:      null,
-      kb_rule_name:        kbAlert?.knowledge_base_entry?.title ?? null,
-      kb_expected_outcome: kbAlert?.knowledge_base_entry?.expected_outcome ?? null,
+      kb_rule_name:        topViolation?.title ?? null,
+      kb_expected_outcome: null,
+      kb_violations:       kbViolations,
+      kb_violation_count:  kbViolations.length,
       recommended_action:  ctx.recommended_action as string | null,
       rationale:           ctx.rationale as string | null,
       entities:            ctx.entities_json as Record<string, unknown> | null,

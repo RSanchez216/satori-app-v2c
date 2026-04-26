@@ -16,13 +16,12 @@ interface Props {
   activeSourceCount: number
 }
 
-function formatAvgResolution(mins: number | null): string {
-  if (mins === null) return '—'
-  if (mins < 60) return `${mins}m`
-  const h = Math.floor(mins / 60)
-  const m = mins % 60
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
+/**
+ * Resolution tracking is not yet implemented (no resolved_at column on
+ * message_contexts, no resolve workflow). Both Resolved Today and Avg
+ * Resolution show em-dashes with a tooltip explaining the gap.
+ */
+const RESOLUTION_TOOLTIP = 'Resolution tracking is not yet implemented. Coming in a future release.'
 
 export function SituationsClient({ situations, departments, activeSourceCount }: Props) {
   const router = useRouter()
@@ -31,12 +30,25 @@ export function SituationsClient({ situations, departments, activeSourceCount }:
   const [threadSit,    setThreadSit]    = useState<SituationData | null>(null)
   const [reanalyzing,  setReanalyzing]  = useState(false)
 
-  /* ── Filter ── */
+  /**
+   * Tab filter logic (page is scoped to today CT in page.tsx, so all counts
+   * are today-only):
+   *   - all:        no filter — every today-CT context
+   *   - open:       alert-worthy AND ai_status not 'resolved'
+   *                 (status derives 'open' from alert_worthy=true; 'escalated' is legacy)
+   *   - kb_flagged: kb_violation_count > 0 (sourced from new kb_violations table)
+   *   - pending:    not alert-worthy AND ai_status not 'resolved'
+   *                 (status derives 'pending' when alert_worthy=false; 'unresolved' is legacy)
+   *   - resolved:   ai_status = 'resolved' — no resolve workflow yet, so this is
+   *                 effectively always empty; kept visible to preview the future shape.
+   * Tabs may overlap (e.g., a KB-flagged context can also be Open). The invariant
+   * is `all` = total distinct today-CT contexts; the others are filtered subsets.
+   */
   const filtered = situations.filter((s) => {
     if (deptFilter !== 'All' && s.department !== deptFilter) return false
     switch (statusFilter) {
       case 'open':       return s.status === 'open' || s.status === 'escalated'
-      case 'kb_flagged': return s.kb_flagged
+      case 'kb_flagged': return (s.kb_violation_count ?? 0) > 0
       case 'pending':    return s.status === 'pending' || s.status === 'unresolved'
       case 'resolved':   return s.status === 'resolved'
       default:           return true
@@ -47,29 +59,14 @@ export function SituationsClient({ situations, departments, activeSourceCount }:
   const counts: Partial<Record<StatusFilter, number>> = {
     all:        situations.length,
     open:       situations.filter((s) => s.status === 'open' || s.status === 'escalated').length,
-    kb_flagged: situations.filter((s) => s.kb_flagged).length,
+    kb_flagged: situations.filter((s) => (s.kb_violation_count ?? 0) > 0).length,
     pending:    situations.filter((s) => s.status === 'pending' || s.status === 'unresolved').length,
     resolved:   situations.filter((s) => s.status === 'resolved').length,
   }
 
   /* ── Summary bar stats ── */
-  const openCount     = counts.open ?? 0
-  const kbCount       = counts.kb_flagged ?? 0
-  const resolvedToday = situations.filter(
-    (s) => s.status === 'resolved' && s.resolved_at &&
-           new Date(s.resolved_at).toDateString() === new Date().toDateString()
-  ).length
-
-  const resolvedWithTimes = situations.filter(
-    (s) => s.status === 'resolved' && s.resolved_at && s.started_at
-  )
-  const avgResolutionMins = resolvedWithTimes.length > 0
-    ? Math.round(
-        resolvedWithTimes.reduce((sum, s) => {
-          return sum + (new Date(s.resolved_at!).getTime() - new Date(s.started_at!).getTime()) / 60000
-        }, 0) / resolvedWithTimes.length
-      )
-    : null
+  const openCount = counts.open ?? 0
+  const kbCount   = counts.kb_flagged ?? 0
 
   /* ── Section groups ── */
   const urgent    = filtered.filter((s) => !s.kb_flagged && (s.severity_peak === 'critical' || s.severity_peak === 'high') && s.status !== 'resolved')
@@ -162,12 +159,14 @@ export function SituationsClient({ situations, departments, activeSourceCount }:
         <Divider />
         <SummaryStat
           icon={<CheckCircle2 size={13} style={{ color: 'var(--severity-low)' }} />}
-          label="Resolved Today" value={resolvedToday} color="var(--severity-low)"
+          label="Resolved Today" value="—" color="var(--text-muted)"
+          tooltip={RESOLUTION_TOOLTIP}
         />
         <Divider />
         <SummaryStat
           icon={<Clock size={13} style={{ color: 'var(--accent)' }} />}
-          label="Avg Resolution" value={formatAvgResolution(avgResolutionMins)} color="var(--accent)"
+          label="Avg Resolution" value="—" color="var(--text-muted)"
+          tooltip={RESOLUTION_TOOLTIP}
         />
       </div>
 
@@ -183,7 +182,9 @@ export function SituationsClient({ situations, departments, activeSourceCount }:
 
       {/* Content */}
       {showEmpty ? (
-        <EmptyState activeSourceCount={activeSourceCount} />
+        statusFilter === 'resolved'
+          ? <ResolvedNotImplemented />
+          : <EmptyState activeSourceCount={activeSourceCount} />
       ) : (
         <div className="space-y-8 stagger">
           {urgent.length > 0 && (
@@ -260,12 +261,45 @@ function Divider() {
   return <div className="w-px h-5 self-center" style={{ background: 'var(--border-subtle)' }} />
 }
 
-function SummaryStat({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number | string; color: string }) {
+function SummaryStat({ icon, label, value, color, tooltip }: { icon: React.ReactNode; label: string; value: number | string; color: string; tooltip?: string }) {
   return (
     <div className="flex items-center gap-2">
       {icon}
       <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{label}</span>
       <span className="text-[14px] font-bold" style={{ color }}>{value}</span>
+      {tooltip && (
+        <span
+          title={tooltip}
+          style={{
+            width: 14, height: 14, borderRadius: '50%',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 9, fontWeight: 800,
+            background: 'var(--border-subtle)', color: 'var(--text-muted)',
+            cursor: 'help', flexShrink: 0,
+          }}
+        >?</span>
+      )}
+    </div>
+  )
+}
+
+function ResolvedNotImplemented() {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-3 py-16 rounded-2xl"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}
+    >
+      <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+        <CheckCircle2 size={20} style={{ color: 'var(--text-muted)' }} />
+      </div>
+      <div className="text-center max-w-sm px-6">
+        <h3 className="text-[15px] font-bold mb-1.5" style={{ color: 'var(--text-secondary)', letterSpacing: '-0.01em' }}>
+          Resolution tracking is not yet implemented
+        </h3>
+        <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          Once a resolve workflow ships, situations marked resolved will appear here with their resolution time.
+        </p>
+      </div>
     </div>
   )
 }

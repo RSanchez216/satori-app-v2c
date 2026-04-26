@@ -1,15 +1,22 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { format, formatDistanceToNow, intervalToDuration } from 'date-fns'
 import {
   MessageSquare, Clock, Bot, Eye, ArrowUpRight,
-  CheckCircle2, Building2,
+  CheckCircle2, Building2, ShieldAlert,
 } from 'lucide-react'
 import { SeverityBadge } from '@/components/ui/SeverityBadge'
 import { ResolutionTimeline } from '@/components/situations/ResolutionTimeline'
 import { KBViolationBanner } from '@/components/situations/KBViolationBanner'
 import type { AlertSeverity } from '@/types/database'
+
+export type KBViolationChip = {
+  rule_id:  string
+  title:    string
+  severity: AlertSeverity
+}
 
 export interface SituationData {
   id: string
@@ -28,6 +35,9 @@ export interface SituationData {
   kb_rule_name?: string | null
   kb_expected_outcome?: string | null
   kb_overdue_text?: string | null
+  /** New-pipeline KB violations (kb_violations + knowledge_base_rules) */
+  kb_violations?: KBViolationChip[]
+  kb_violation_count?: number
   /** 0=Detected, 1=Tori Alerted, 2=Escalated, 3=Response, 4=Resolved */
   active_step?: number
   source_name?: string | null
@@ -39,6 +49,13 @@ export interface SituationData {
   context_text?: string | null
   context_preview?: string | null
   alert_worthy?: boolean
+}
+
+const SEV_DOT: Record<string, string> = {
+  critical: 'var(--severity-critical)',
+  high:     'var(--severity-high)',
+  medium:   'var(--severity-medium)',
+  low:      'var(--severity-low)',
 }
 
 export function resolveTitle(s: SituationData): string {
@@ -103,9 +120,13 @@ interface Props {
 }
 
 export function SituationCard({ situation: s, onEscalate, onViewThread }: Props) {
-  const style = cardStyle(s)
+  const router     = useRouter()
+  const style      = cardStyle(s)
   const isResolved = s.status === 'resolved'
   const activeStep = s.active_step ?? (isResolved ? 4 : s.kb_flagged ? 2 : 1)
+  const kbViolations = s.kb_violations ?? []
+  const visibleChips = kbViolations.slice(0, 3)
+  const remainingChips = Math.max(0, kbViolations.length - 3)
 
   return (
     <div
@@ -262,6 +283,42 @@ export function SituationCard({ situation: s, onEscalate, onViewThread }: Props)
             )}
           </div>
         </div>
+
+        {/* ── KB violation chips (max 3 + N more) ── */}
+        {kbViolations.length > 0 && (
+          <div className="flex items-center flex-wrap gap-1.5 mt-2.5">
+            {visibleChips.map((chip) => (
+              <button
+                key={chip.rule_id}
+                onClick={(e) => { e.stopPropagation(); router.push(`/inbox?rule_id=${encodeURIComponent(chip.rule_id)}`) }}
+                title={chip.title}
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono font-semibold transition-colors"
+                style={{
+                  padding: '2px 8px',
+                  borderRadius: 6,
+                  background: 'var(--bg-elevated)',
+                  color: 'var(--text-secondary)',
+                  border: '1px solid var(--border-subtle)',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-default)' }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-subtle)' }}
+              >
+                <span
+                  className="inline-block flex-shrink-0"
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: SEV_DOT[chip.severity] ?? 'var(--text-muted)' }}
+                />
+                <ShieldAlert size={9} style={{ color: 'var(--text-muted)' }} />
+                {chip.rule_id}
+              </button>
+            ))}
+            {remainingChips > 0 && (
+              <span className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                +{remainingChips} more
+              </span>
+            )}
+          </div>
+        )}
 
         {/* ── Synthesis text ── */}
         {s.synthesis_text && (
