@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
   Printer, AlertTriangle, ArrowUp, ArrowDown, Minus,
   Truck, User, Calendar, Wrench, Gauge, Phone, Flame, Droplet, ZapOff,
+  ChevronRight,
 } from 'lucide-react'
+import { buildDateRange } from '@/components/ui/date-filter'
 
-export type RangePreset = '7d' | '30d' | 'custom'
+export type RangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
 
 export type OverviewData = {
   totalAlerts:         number
@@ -44,11 +46,11 @@ export type UnitRow = {
 }
 
 export type CriticalRow = {
-  alertType:      'crash' | 'distraction' | 'severe_speeding'
-  driverId:       string | null
-  unitId:         string | null
-  messageExcerpt: string
-  occurredAt:     string
+  alertType:   'crash' | 'distraction' | 'severe_speeding'
+  driverId:    string | null
+  unitId:      string | null
+  messageFull: string
+  occurredAt:  string
 }
 
 interface Props {
@@ -102,9 +104,28 @@ function cleanExcerpt(raw: string): string {
   s = s.replace(/[^\x00-\x7F]+/g, ' · ')
   s = s.replace(/\s+/g, ' ').trim()
   s = s.replace(/^[·\s]+|[·\s]+$/g, '').trim()
+  // Strip trailing 'View Incident'/'View Alert'/etc. boilerplate
+  s = s.replace(/\s*·?\s*View\s+(Incident|Alert|Details?)\s*\.?\s*$/i, '').trim()
   s = s.replace(/(\s·\s){2,}/g, ' · ')
+  // Cap at 200 chars; the full original message is always available in the
+  // expand-on-click panel for events that need the rest.
+  if (s.length > 200) s = s.slice(0, 200).trimEnd() + '…'
 
   return s
+}
+
+function categoriesHit(d: DriverRow): string[] {
+  // Priority order: highest-weighted categories first so the tooltip reads
+  // "what risk this driver represents" not "every box ticked alphabetically".
+  const labels: Array<[number, string]> = [
+    [d.distraction, 'Distraction'],
+    [d.speeding,    'Speeding'],
+    [d.harshBrake,  'Harsh Braking'],
+    [d.def,         'DEF System'],
+    [d.idle,        'Engine Idle'],
+    [d.fuelLow,     'Fuel Low'],
+  ]
+  return labels.filter(([n]) => n > 0).map(([, label]) => label)
 }
 
 function dominantDriverIssue(d: DriverRow): keyof typeof ALERT_LABELS {
@@ -151,12 +172,38 @@ function coachingForUnit(u: UnitRow): string {
 export function SamsaraOffendersClient({ from, to, preset, overview, drivers, units, critical }: Props) {
   const router = useRouter()
   const [showCustom, setShowCustom] = useState(false)
+  // Records (not Sets) for accordion expand state — avoids Set iteration which
+  // hits this project's downlevelIteration TS limit.
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
+  const [eventOpen, setEventOpen] = useState<Record<number, boolean>>({})
+
+  const criticalGroups = useMemo(() => {
+    const order: CriticalRow['alertType'][] = ['crash', 'severe_speeding', 'distraction']
+    return order
+      .map(type => ({ type, rows: critical.filter(c => c.alertType === type) }))
+      .filter(g => g.rows.length > 0)
+  }, [critical])
+
+  function toggleGroup(key: string) {
+    setGroupOpen(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+  function toggleEvent(idx: number) {
+    setEventOpen(prev => ({ ...prev, [idx]: !prev[idx] }))
+  }
 
   const fromDate = new Date(from)
   const toDate   = new Date(to)
   const dateLabel = `${format(fromDate, 'MMM d')} – ${format(toDate, 'MMM d, yyyy')}`
 
   function applyPreset(p: RangePreset) {
+    if (p === 'today' || p === 'yesterday') {
+      // Use the same CT-midnight math the Dashboard's preset tabs use,
+      // so this report's Today/Yesterday windows match exactly.
+      const r = buildDateRange(p)
+      const params = new URLSearchParams({ preset: p, from: r.from, to: r.to })
+      router.push(`/reports/samsara-offenders?${params.toString()}`)
+      return
+    }
     if (p === '7d')  router.push('/reports/samsara-offenders?preset=7d')
     if (p === '30d') router.push('/reports/samsara-offenders?preset=30d')
     if (p === 'custom') setShowCustom(true)
@@ -177,8 +224,12 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
     <>
       {/* Print-only styles */}
       <style>{`
+        .print-only { display: none; }
         @media print {
           .no-print { display: none !important; }
+          .print-only { display: block !important; }
+          /* Force accordion content visible in PDF regardless of expand state */
+          .report-accordion-body { display: block !important; }
           body { background: #fff !important; }
           .report-page { padding: 0 !important; max-width: 100% !important; }
           .report-card { break-inside: avoid; box-shadow: none !important; border-color: #ddd !important; }
@@ -203,9 +254,14 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
           <div className="no-print flex items-center gap-2 flex-wrap">
             {/* Date pills */}
             <div className="flex items-center gap-1 p-1 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-              {(['7d', '30d', 'custom'] as RangePreset[]).map(p => {
+              {(['today', 'yesterday', '7d', '30d', 'custom'] as RangePreset[]).map(p => {
                 const active = preset === p
-                const label = p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : 'Custom Range'
+                const label =
+                  p === 'today'     ? 'Today'
+                  : p === 'yesterday' ? 'Yesterday'
+                  : p === '7d'      ? '7 Days'
+                  : p === '30d'     ? '30 Days'
+                  :                   'Custom Range'
                 return (
                   <button
                     key={p}
@@ -281,7 +337,21 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                     <Th align="right">DEF</Th>
                     <Th>Cross-cat</Th>
                     <Th>Last Alert</Th>
-                    <Th align="right">Risk</Th>
+                    <Th align="right">
+                      <span className="inline-flex items-center gap-1">
+                        Risk
+                        <span
+                          title={'Weighted score per driver:\n• Distraction events × 5\n• Speeding, Harsh Braking, DEF × 3\n• Engine Idle, Fuel Low × 1\n\nHigher score = higher risk profile.'}
+                          style={{
+                            width: 12, height: 12, borderRadius: '50%',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 8, fontWeight: 800,
+                            background: 'var(--border-subtle)', color: 'var(--text-muted)',
+                            cursor: 'help', flexShrink: 0,
+                          }}
+                        >?</span>
+                      </span>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -303,7 +373,10 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                         <Td align="right">{d.def || '—'}</Td>
                         <Td>
                           {d.alertTypesHit >= 3 ? (
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)' }}>
+                            <span
+                              title={categoriesHit(d).join(' · ')}
+                              style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', cursor: 'help' }}
+                            >
                               {d.alertTypesHit} types
                             </span>
                           ) : (
@@ -377,53 +450,136 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
           )}
         </section>
 
-        {/* ── 3. Critical Events ── */}
+        {/* ── 3. Critical Events (two-level accordion) ── */}
         <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <SectionHeader number="3" title="Critical Events" subtitle="Crashes, distraction, and severe speeding — every event in the window" icon={AlertTriangle} />
-          {critical.length === 0 ? (
+          <SectionHeader number="3" title="Critical Events" subtitle="Crashes, distraction, and severe speeding — grouped by category, expand to view events" icon={AlertTriangle} />
+          {criticalGroups.length === 0 ? (
             <EmptySection text="No critical events in this period — clean window. ✅" />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {critical.map((c, i) => {
-                const meta = CRITICAL_META[c.alertType]
-                const Icon = meta.icon
+              {criticalGroups.map((group, gi) => {
+                const meta   = CRITICAL_META[group.type]
+                const Icon   = meta.icon
+                const isOpen = !!groupOpen[group.type]
                 return (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3"
-                    style={{
-                      padding: '12px 20px',
-                      borderBottom: i < critical.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    }}
-                  >
-                    <div className="flex-shrink-0 flex items-center justify-center" style={{
-                      width: 32, height: 32, borderRadius: 8,
-                      background: `${meta.color}15`, color: meta.color,
-                    }}>
-                      <Icon size={15} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span style={{ fontSize: 11, fontWeight: 700, color: meta.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          {meta.label}
-                        </span>
-                        {c.driverId && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            Driver <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.driverId}</span>
-                          </span>
-                        )}
-                        {c.unitId && (
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            Unit <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)' }}>{c.unitId}</span>
-                          </span>
-                        )}
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
-                          {format(new Date(c.occurredAt), 'MMM d, h:mm a')}
-                        </span>
+                  <div key={group.type} style={{ borderBottom: gi < criticalGroups.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
+                    {/* Level 1: group row */}
+                    <button
+                      onClick={() => toggleGroup(group.type)}
+                      className="no-print w-full flex items-center gap-3"
+                      style={{
+                        padding: '12px 20px', textAlign: 'left',
+                        background: 'transparent', border: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      <ChevronRight
+                        size={14}
+                        style={{
+                          color: 'var(--text-muted)',
+                          flexShrink: 0,
+                          transform: isOpen ? 'rotate(90deg)' : 'none',
+                          transition: 'transform 0.15s ease',
+                        }}
+                      />
+                      <div className="flex-shrink-0 flex items-center justify-center" style={{
+                        width: 28, height: 28, borderRadius: 7,
+                        background: `${meta.color}15`, color: meta.color,
+                      }}>
+                        <Icon size={14} />
                       </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-                        {cleanExcerpt(c.messageExcerpt)}
-                      </p>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {meta.label}
+                      </span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
+                        {group.rows.length} event{group.rows.length !== 1 ? 's' : ''}
+                      </span>
+                    </button>
+
+                    {/* Print-only static header so groups render labelled in PDF */}
+                    <div className="print-only flex items-center gap-2" style={{ padding: '10px 20px 4px' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: meta.color }}>
+                        {meta.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        ({group.rows.length} event{group.rows.length !== 1 ? 's' : ''})
+                      </span>
+                    </div>
+
+                    {/* Level 2: event rows */}
+                    <div
+                      className="report-accordion-body"
+                      style={{ display: isOpen ? 'block' : 'none' }}
+                    >
+                      {group.rows.map((c) => {
+                        // Use a stable key derived from occurredAt+driverId so the
+                        // expanded-row state survives re-renders.
+                        const key = `${group.type}|${c.occurredAt}|${c.driverId ?? ''}|${c.unitId ?? ''}`
+                        const eIdx = critical.indexOf(c)
+                        const eOpen = !!eventOpen[eIdx]
+                        return (
+                          <div key={key} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                            <button
+                              onClick={() => toggleEvent(eIdx)}
+                              className="w-full flex items-start gap-3"
+                              style={{
+                                padding: '10px 20px 10px 50px', textAlign: 'left',
+                                background: 'transparent', border: 'none', cursor: 'pointer',
+                              }}
+                            >
+                              <ChevronRight
+                                size={12}
+                                className="no-print"
+                                style={{
+                                  color: 'var(--text-muted)',
+                                  flexShrink: 0, marginTop: 3,
+                                  transform: eOpen ? 'rotate(90deg)' : 'none',
+                                  transition: 'transform 0.15s ease',
+                                }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    Driver <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.driverId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                                      {c.driverId ?? '—'}
+                                    </span>
+                                  </span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    Unit <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.unitId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                                      {c.unitId ?? '—'}
+                                    </span>
+                                  </span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                                    {format(new Date(c.occurredAt), 'MMM d, h:mm a')}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.5 }}>
+                                  {cleanExcerpt(c.messageFull)}
+                                </p>
+                              </div>
+                            </button>
+
+                            {/* Full original message panel */}
+                            <div
+                              className="report-accordion-body"
+                              style={{ display: eOpen ? 'block' : 'none', padding: '0 20px 12px 50px' }}
+                            >
+                              <pre style={{
+                                fontSize: 11, fontFamily: 'monospace',
+                                background: 'var(--bg-elevated)',
+                                border: '1px solid var(--border-subtle)',
+                                borderRadius: 6, padding: 10,
+                                color: 'var(--text-secondary)',
+                                whiteSpace: 'pre-wrap',
+                                overflowX: 'auto',
+                                maxHeight: 400,
+                                margin: 0,
+                              }}>
+                                {c.messageFull}
+                              </pre>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )

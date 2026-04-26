@@ -211,11 +211,11 @@ CREATE OR REPLACE FUNCTION public.get_samsara_critical_events(
   p_limit int DEFAULT 50
 )
 RETURNS TABLE (
-  alert_type      text,
-  driver_id       text,
-  unit_id         text,
-  message_excerpt text,
-  occurred_at     timestamptz
+  alert_type   text,
+  driver_id    text,
+  unit_id      text,
+  message_full text,
+  occurred_at  timestamptz
 )
 LANGUAGE sql
 STABLE
@@ -246,7 +246,7 @@ AS $$
     alert_type,
     driver_id,
     unit_id,
-    LEFT(REGEXP_REPLACE(message_text, '\s+', ' ', 'g'), 200)             AS message_excerpt,
+    message_text                                                          AS message_full,
     created_at                                                            AS occurred_at
   FROM base
   WHERE alert_type IN ('crash','distraction','severe_speeding')

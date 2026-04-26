@@ -9,7 +9,7 @@ interface Props {
 }
 
 function isPreset(v: string | undefined): v is RangePreset {
-  return v === '7d' || v === '30d' || v === 'custom'
+  return v === 'today' || v === 'yesterday' || v === '7d' || v === '30d' || v === 'custom'
 }
 
 export default async function SamsaraOffendersPage({ searchParams }: Props) {
@@ -17,18 +17,21 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
   const sevenD = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
 
   // Resolve range. Default = last 7 days.
+  // For today/yesterday/custom, the client always pushes from/to in the URL
+  // (computed via buildDateRange which uses CT-midnight math); the server
+  // trusts those bounds. 7d/30d have server-side defaults so URLs stay clean.
   let preset: RangePreset = isPreset(searchParams.preset) ? searchParams.preset : '7d'
   let fromISO: string
   let toISO:   string
 
-  if (preset === 'custom' && searchParams.from && searchParams.to) {
+  if (searchParams.from && searchParams.to) {
     const f = new Date(searchParams.from)
     const t = new Date(searchParams.to)
     if (!isNaN(f.getTime()) && !isNaN(t.getTime())) {
       fromISO = f.toISOString()
       toISO   = t.toISOString()
     } else {
-      preset = '7d'
+      preset  = '7d'
       fromISO = sevenD.toISOString()
       toISO   = now.toISOString()
     }
@@ -89,11 +92,11 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
   }))
 
   const critical: CriticalRow[] = (criticalRes.data ?? []).map((r: Record<string, unknown>) => ({
-    alertType:      r.alert_type as CriticalRow['alertType'],
-    driverId:       (r.driver_id as string | null) ?? null,
-    unitId:         (r.unit_id as string | null) ?? null,
-    messageExcerpt: r.message_excerpt as string,
-    occurredAt:     r.occurred_at as string,
+    alertType:   r.alert_type as CriticalRow['alertType'],
+    driverId:    (r.driver_id as string | null) ?? null,
+    unitId:      (r.unit_id as string | null) ?? null,
+    messageFull: r.message_full as string,
+    occurredAt:  r.occurred_at as string,
   }))
 
   return (
