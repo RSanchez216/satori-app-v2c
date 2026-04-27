@@ -144,6 +144,22 @@ function ListPreview({ items, hover }: { items: string[]; hover?: string }) {
 }
 
 /**
+ * Compact relative time: "5m ago" / "3h ago" / "2d ago". Used in the
+ * watchlist tables where horizontal space is tight. The verbose
+ * "about 14 hours ago" form is kept for Critical Events.
+ */
+function shortRelativeTime(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const mins = Math.max(1, Math.round(ms / 60_000))
+  if (mins < 60)  return `${mins}m ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
+}
+
+/**
  * Inline Top Issues string for a driver row — replaces six per-category
  * columns with a single readable cell. Sorted by count desc; only
  * non-zero categories rendered.
@@ -451,150 +467,174 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
         />
 
         {/* ── 1. Driver Watchlist ── */}
-        <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+        <section className="report-card rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <SectionHeader number="1" title="Driver Watchlist" subtitle="Drivers by risk score (distraction × 5 + speeding/harsh-brake/DEF × 3 + idle/fuel-low × 1)" icon={User} />
           {driverPag.rows.length === 0 ? (
             <EmptySection text="No driver-attributed Samsara alerts in this window." />
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="report-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
-                    <Th>#</Th>
-                    <Th sticky>Driver</Th>
-                    <Th>Unit(s)</Th>
-                    <Th align="right">Total</Th>
-                    <Th>Top Issues</Th>
-                    <Th>Cross-cat</Th>
-                    <Th>Last Alert</Th>
-                    <Th align="right">
-                      <span className="inline-flex items-center gap-1">
-                        Risk
-                        <HoverTip label={'Weighted score per driver:\n• Distraction events × 5\n• Speeding, Harsh Braking, DEF × 3\n• Engine Idle, Fuel Low × 1\n\nHigher score = higher risk profile.'}>
-                          <span
-                            style={{
-                              width: 12, height: 12, borderRadius: '50%',
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 8, fontWeight: 800,
-                              background: 'var(--border-subtle)', color: 'var(--text-muted)',
-                              cursor: 'help', flexShrink: 0,
-                            }}
-                          >?</span>
-                        </HoverTip>
-                      </span>
-                    </Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {driverPag.rows.map((d, i) => {
-                    const isWorst = d.riskScore >= 100
-                    const rank    = driverPag.page * PAGE_SIZE + i + 1
-                    return (
-                      <tr key={d.driverId} style={{
-                        borderBottom: '1px solid var(--border-subtle)',
-                        background: isWorst ? 'rgba(248,81,73,0.05)' : 'transparent',
-                      }}>
-                        <Td>{rank}</Td>
-                        <Td sticky bgRow={isWorst ? 'rgba(248,81,73,0.05)' : 'var(--bg-surface)'}>
-                          <div className="flex flex-col">
-                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                              {d.isResolved && d.driverName ? d.driverName : d.driverId}
-                            </span>
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: d.isResolved ? 'monospace' : 'inherit' }}>
-                              {d.isResolved && d.driverName ? d.driverId : 'unmapped'}
-                            </span>
-                          </div>
-                        </Td>
-                        <Td>
-                          <ListPreview items={d.unitsDriven} />
-                        </Td>
-                        <Td align="right" bold>{d.totalAlerts}</Td>
-                        <Td>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            {topIssues(d) || '—'}
+            <table className="report-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
+              <colgroup>
+                <col style={{ width: 48 }}  />{/* # */}
+                <col />                      {/* Driver — flex */}
+                <col />                      {/* Unit(s) — flex */}
+                <col style={{ width: 64 }}  />{/* Total */}
+                <col />                      {/* Top Issues — flex */}
+                <col style={{ width: 92 }}  />{/* Cross-cat */}
+                <col style={{ width: 96 }}  />{/* Last Alert */}
+                <col style={{ width: 72 }}  />{/* Risk */}
+              </colgroup>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: 'var(--bg-surface)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
+                  <Th sticky stickyLeft={0}>#</Th>
+                  <Th sticky stickyLeft={48}>Driver</Th>
+                  <Th>Unit(s)</Th>
+                  <Th align="right">Total</Th>
+                  <Th>Top Issues</Th>
+                  <Th>Cross-cat</Th>
+                  <Th align="right">Last Alert</Th>
+                  <Th align="right">
+                    <span className="inline-flex items-center gap-1" style={{ justifyContent: 'flex-end', width: '100%' }}>
+                      Risk
+                      <HoverTip label={'Weighted score per driver:\n• Distraction events × 5\n• Speeding, Harsh Braking, DEF × 3\n• Engine Idle, Fuel Low × 1\n\nHigher score = higher risk profile.'}>
+                        <span
+                          style={{
+                            width: 12, height: 12, borderRadius: '50%',
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 8, fontWeight: 800,
+                            background: 'var(--border-subtle)', color: 'var(--text-muted)',
+                            cursor: 'help', flexShrink: 0,
+                          }}
+                        >?</span>
+                      </HoverTip>
+                    </span>
+                  </Th>
+                </tr>
+              </thead>
+              <tbody>
+                {driverPag.rows.map((d, i) => {
+                  const isWorst = d.riskScore >= 100
+                  const rank    = driverPag.page * PAGE_SIZE + i + 1
+                  const rowBg   = isWorst ? 'rgba(248,81,73,0.05)' : 'var(--bg-surface)'
+                  return (
+                    <tr key={d.driverId} style={{
+                      borderBottom: '1px solid var(--border-subtle)',
+                      background: isWorst ? 'rgba(248,81,73,0.05)' : 'transparent',
+                    }}>
+                      <Td sticky stickyLeft={0} bgRow={rowBg}>{rank}</Td>
+                      <Td sticky stickyLeft={48} bgRow={rowBg}>
+                        <div className="flex flex-col">
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {d.isResolved && d.driverName ? d.driverName : d.driverId}
                           </span>
-                        </Td>
-                        <Td>
-                          {d.alertTypesHit >= 3 ? (
-                            <HoverTip label={categoriesHit(d).join(' · ')}>
-                              <span
-                                style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', cursor: 'help' }}
-                              >
-                                {d.alertTypesHit} types
-                              </span>
-                            </HoverTip>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)' }}>{d.alertTypesHit}</span>
-                          )}
-                        </Td>
-                        <Td><span style={{ color: 'var(--text-muted)' }}>{formatDistanceToNow(new Date(d.lastAlertAt), { addSuffix: true })}</span></Td>
-                        <Td align="right">
-                          <span style={{
-                            fontWeight: 700,
-                            color: isWorst ? 'var(--severity-critical)' : 'var(--text-primary)',
-                          }}>
-                            {d.riskScore}
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: d.isResolved ? 'monospace' : 'inherit' }}>
+                            {d.isResolved && d.driverName ? d.driverId : 'unmapped'}
                           </span>
-                        </Td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </div>
+                      </Td>
+                      <Td>
+                        <ListPreview items={d.unitsDriven} />
+                      </Td>
+                      <Td align="right" bold tabularNums>{d.totalAlerts}</Td>
+                      <Td>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {topIssues(d) || '—'}
+                        </span>
+                      </Td>
+                      <Td>
+                        {d.alertTypesHit >= 3 ? (
+                          <HoverTip label={categoriesHit(d).join(' · ')}>
+                            <span
+                              style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: 'rgba(248,81,73,0.12)', color: 'var(--severity-critical)', cursor: 'help' }}
+                            >
+                              {d.alertTypesHit} types
+                            </span>
+                          </HoverTip>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>{d.alertTypesHit}</span>
+                        )}
+                      </Td>
+                      <Td align="right" tabularNums>
+                        <span style={{ color: 'var(--text-muted)' }}>{shortRelativeTime(d.lastAlertAt)}</span>
+                      </Td>
+                      <Td align="right" tabularNums>
+                        <span style={{
+                          fontWeight: 700,
+                          color: isWorst ? 'var(--severity-critical)' : 'var(--text-primary)',
+                        }}>
+                          {d.riskScore}
+                        </span>
+                      </Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           )}
           <WatchlistFooter pag={driverPag} label="drivers" />
         </section>
 
         {/* ── 2. Unit Watchlist ── */}
-        <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+        <section className="report-card rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
           <SectionHeader number="2" title="Unit Watchlist" subtitle="Units by vehicle-fault count and distinct SPN/FMI codes" icon={Truck} />
           {unitPag.rows.length === 0 ? (
             <EmptySection text="No unit-attributed Samsara alerts in this window." />
           ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="report-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
-                    <Th>#</Th>
-                    <Th>Unit</Th>
-                    <Th>Driver(s)</Th>
-                    <Th align="right">Faults</Th>
-                    <Th align="right">Distinct codes</Th>
-                    <Th align="right">Idle</Th>
-                    <Th align="right">Total</Th>
-                    <Th>Last alert</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unitPag.rows.map((u, i) => {
-                    const isLemon = u.faultCount >= 20 && u.faultCodesDistinct >= 5
-                    const rank = unitPag.page * PAGE_SIZE + i + 1
-                    return (
-                      <tr key={u.unitId} style={{
-                        borderBottom: '1px solid var(--border-subtle)',
-                        background: isLemon ? 'rgba(248,81,73,0.05)' : 'transparent',
-                      }}>
-                        <Td>{rank}</Td>
-                        <Td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{u.unitId}</span></Td>
-                        <Td><ListPreview items={u.drivers} /></Td>
-                        <Td align="right" bold>{u.faultCount}</Td>
-                        <Td align="right">
-                          {u.faultCodesDistinct >= 5 ? (
-                            <span style={{ fontWeight: 700, color: 'var(--severity-critical)' }}>{u.faultCodesDistinct}</span>
-                          ) : (
-                            u.faultCodesDistinct || '—'
-                          )}
-                        </Td>
-                        <Td align="right">{u.idleCount || '—'}</Td>
-                        <Td align="right">{u.totalAlerts}</Td>
-                        <Td><span style={{ color: 'var(--text-muted)' }}>{formatDistanceToNow(new Date(u.lastAlertAt), { addSuffix: true })}</span></Td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <table className="report-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'auto' }}>
+              <colgroup>
+                <col style={{ width: 48 }}  />{/* # */}
+                <col style={{ width: 110 }} />{/* Unit */}
+                <col />                       {/* Driver(s) — flex */}
+                <col style={{ width: 80 }}  />{/* Faults */}
+                <col style={{ width: 110 }} />{/* Distinct codes */}
+                <col style={{ width: 64 }}  />{/* Idle */}
+                <col style={{ width: 64 }}  />{/* Total */}
+                <col style={{ width: 96 }}  />{/* Last alert */}
+              </colgroup>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 3, background: 'var(--bg-surface)' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
+                  <Th sticky stickyLeft={0}>#</Th>
+                  <Th sticky stickyLeft={48}>Unit</Th>
+                  <Th>Driver(s)</Th>
+                  <Th align="right">Faults</Th>
+                  <Th align="right">Distinct codes</Th>
+                  <Th align="right">Idle</Th>
+                  <Th align="right">Total</Th>
+                  <Th align="right">Last alert</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {unitPag.rows.map((u, i) => {
+                  const isLemon = u.faultCount >= 20 && u.faultCodesDistinct >= 5
+                  const rank    = unitPag.page * PAGE_SIZE + i + 1
+                  const rowBg   = isLemon ? 'rgba(248,81,73,0.05)' : 'var(--bg-surface)'
+                  return (
+                    <tr key={u.unitId} style={{
+                      borderBottom: '1px solid var(--border-subtle)',
+                      background: isLemon ? 'rgba(248,81,73,0.05)' : 'transparent',
+                    }}>
+                      <Td sticky stickyLeft={0} bgRow={rowBg}>{rank}</Td>
+                      <Td sticky stickyLeft={48} bgRow={rowBg}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{u.unitId}</span>
+                      </Td>
+                      <Td><ListPreview items={u.drivers} /></Td>
+                      <Td align="right" bold tabularNums>{u.faultCount}</Td>
+                      <Td align="right" tabularNums>
+                        {u.faultCodesDistinct >= 5 ? (
+                          <span style={{ fontWeight: 700, color: 'var(--severity-critical)' }}>{u.faultCodesDistinct}</span>
+                        ) : (
+                          u.faultCodesDistinct || '—'
+                        )}
+                      </Td>
+                      <Td align="right" tabularNums>{u.idleCount || '—'}</Td>
+                      <Td align="right" tabularNums>{u.totalAlerts}</Td>
+                      <Td align="right" tabularNums>
+                        <span style={{ color: 'var(--text-muted)' }}>{shortRelativeTime(u.lastAlertAt)}</span>
+                      </Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           )}
           <WatchlistFooter pag={unitPag} label="units" />
         </section>
@@ -854,14 +894,22 @@ function EmptySection({ text }: { text: string }) {
   )
 }
 
-function Th({ children, align = 'left', sticky = false }: { children: React.ReactNode; align?: 'left' | 'right'; sticky?: boolean }) {
+function Th({
+  children, align = 'left', sticky = false, stickyLeft = 0,
+}: {
+  children: React.ReactNode; align?: 'left' | 'right'
+  sticky?: boolean; stickyLeft?: number
+}) {
+  // Sticky header cells live inside the sticky <thead> (zIndex 3). Bumping
+  // their own zIndex to 5 keeps them above the sticky body cells (zIndex 2)
+  // when the user scrolls both axes simultaneously.
   return (
     <th
       style={{
         padding: '10px 14px',
         fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
         color: 'var(--text-muted)', textAlign: align,
-        ...(sticky ? { position: 'sticky', left: 0, background: 'var(--bg-surface)', zIndex: 2 } : null),
+        ...(sticky ? { position: 'sticky', left: stickyLeft, background: 'var(--bg-surface)', zIndex: 5 } : null),
       }}
     >
       {children}
@@ -870,10 +918,10 @@ function Th({ children, align = 'left', sticky = false }: { children: React.Reac
 }
 
 function Td({
-  children, align = 'left', bold = false, sticky = false, bgRow,
+  children, align = 'left', bold = false, sticky = false, stickyLeft = 0, bgRow, tabularNums = false,
 }: {
   children: React.ReactNode; align?: 'left' | 'right'; bold?: boolean
-  sticky?: boolean; bgRow?: string
+  sticky?: boolean; stickyLeft?: number; bgRow?: string; tabularNums?: boolean
 }) {
   return (
     <td
@@ -883,7 +931,8 @@ function Td({
         color: 'var(--text-secondary)',
         textAlign: align,
         fontWeight: bold ? 700 : 400,
-        ...(sticky ? { position: 'sticky', left: 0, background: bgRow ?? 'var(--bg-surface)', zIndex: 1 } : null),
+        ...(tabularNums ? { fontVariantNumeric: 'tabular-nums' } : null),
+        ...(sticky ? { position: 'sticky', left: stickyLeft, background: bgRow ?? 'var(--bg-surface)', zIndex: 2 } : null),
       }}
     >
       {children}
