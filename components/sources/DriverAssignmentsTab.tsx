@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, AlertTriangle, Trash2, Loader2, CheckCircle2, ChevronUp, ChevronDown, Search } from 'lucide-react'
+import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, AlertTriangle, Trash2, Loader2, CheckCircle2, ChevronUp, ChevronDown, Search, Plus, Pencil, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
 import { createClient } from '@/lib/supabase/client'
+import { AssignmentModal } from '@/components/sources/AssignmentModal'
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -371,6 +372,32 @@ export function DriverAssignmentsTab() {
 type SortCol = 'unit_id' | 'driver_name' | 'driver_id' | 'start_date' | 'end_date'
 const PAGE_SIZE = 25
 
+type EditDraft = {
+  unit_id:     string
+  driver_id:   string
+  driver_name: string
+  start_date:  string   // YYYY-MM-DD
+  end_date:    string   // YYYY-MM-DD or '' for active
+}
+
+function isoToYMD(iso: string): string {
+  // Use UTC components so a row with start_date stored as 2026-04-26T12:00 UTC
+  // round-trips back to '2026-04-26' regardless of viewer timezone.
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const yy = d.getUTCFullYear()
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(d.getUTCDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+function ymdToNoonUTC(ymd: string): string | null {
+  const m = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  const [, y, mo, d] = m
+  return new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), 12, 0, 0)).toISOString()
+}
+
 function IdleView({
   counts, reloadKey, onFileSelected, confirmClear, onRequestClear, onCancelClear, onClearAll,
 }: {
@@ -391,6 +418,13 @@ function IdleView({
   const [rows,        setRows]        = useState<Assignment[]>([])
   const [total,       setTotal]       = useState(0)
   const [loading,     setLoading]     = useState(false)
+  const [showNewModal, setShowNewModal] = useState(false)
+  const [editingId,    setEditingId]    = useState<string | null>(null)
+  const [editDraft,    setEditDraft]    = useState<EditDraft | null>(null)
+  const [savingEdit,   setSavingEdit]   = useState(false)
+  const [deleteId,     setDeleteId]     = useState<string | null>(null)
+  // Local nonce to force IdleView to re-fetch after a CRUD mutation
+  const [localReloadKey, setLocalReloadKey] = useState(0)
 
   // Debounce: wait 250ms after typing stops before firing the query
   useEffect(() => {
@@ -436,11 +470,71 @@ function IdleView({
     })
 
     return () => { cancelled = true }
-  }, [page, search, activeOnly, sortCol, sortAsc, reloadKey])
+  }, [page, search, activeOnly, sortCol, sortAsc, reloadKey, localReloadKey])
 
   function toggleSort(col: SortCol) {
     if (col === sortCol) setSortAsc((v) => !v)
     else { setSortCol(col); setSortAsc(false) }
+  }
+
+  function startEdit(a: Assignment) {
+    setEditingId(a.id)
+    setEditDraft({
+      unit_id:     a.unit_id,
+      driver_id:   a.driver_id,
+      driver_name: a.driver_name,
+      start_date:  isoToYMD(a.start_date),
+      end_date:    a.end_date ? isoToYMD(a.end_date) : '',
+    })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditDraft(null)
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editDraft) return
+    const startISO = ymdToNoonUTC(editDraft.start_date)
+    if (!editDraft.unit_id.trim() || !editDraft.driver_id.trim() || !editDraft.driver_name.trim() || !startISO) {
+      toast.error('Unit, Driver ID, Driver Name, and Start Date are required.')
+      return
+    }
+    setSavingEdit(true)
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('driver_unit_assignments')
+      .update({
+        unit_id:     editDraft.unit_id.trim(),
+        driver_id:   editDraft.driver_id.trim(),
+        driver_name: editDraft.driver_name.trim(),
+        start_date:  startISO,
+        end_date:    editDraft.end_date ? ymdToNoonUTC(editDraft.end_date) : null,
+      })
+      .eq('id', editingId)
+    setSavingEdit(false)
+    if (error) {
+      toast.error('Update failed: ' + error.message)
+      return
+    }
+    toast.success('Assignment updated')
+    cancelEdit()
+    setLocalReloadKey((k) => k + 1)
+  }
+
+  async function confirmDelete(id: string) {
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('driver_unit_assignments')
+      .delete()
+      .eq('id', id)
+    if (error) {
+      toast.error('Delete failed: ' + error.message)
+      return
+    }
+    toast.success('Assignment deleted')
+    setDeleteId(null)
+    setLocalReloadKey((k) => k + 1)
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -575,6 +669,17 @@ function IdleView({
             />
             Active only
           </label>
+
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="flex items-center gap-1.5"
+            style={{
+              padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700,
+              background: 'var(--accent)', border: 'none', color: '#fff', cursor: 'pointer',
+            }}
+          >
+            <Plus size={12} /> New Assignment
+          </button>
         </div>
 
         {/* Table */}
@@ -600,18 +705,97 @@ function IdleView({
                   <SortableTh col="driver_id"   label="Driver ID"  sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
                   <SortableTh col="start_date"  label="Start"      sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
                   <SortableTh col="end_date"    label="End"        sortCol={sortCol} sortAsc={sortAsc} onClick={toggleSort} />
+                  <th style={{ ...thStyle, width: 80, textAlign: 'right' }}></th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((a) => (
-                  <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                    <td style={tdStyle}><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{a.unit_id}</span></td>
-                    <td style={tdStyle}>{a.driver_name}</td>
-                    <td style={tdStyle}><span style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{a.driver_id}</span></td>
-                    <td style={tdStyle}>{new Date(a.start_date).toLocaleDateString()}</td>
-                    <td style={tdStyle}>{a.end_date ? new Date(a.end_date).toLocaleDateString() : <span style={{ color: 'var(--severity-low)', fontWeight: 600 }}>active</span>}</td>
-                  </tr>
-                ))}
+                {rows.map((a) => {
+                  const editing = editingId === a.id && editDraft !== null
+                  if (editing && editDraft) {
+                    return (
+                      <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)' }}>
+                        <td style={tdStyle}>
+                          <input value={editDraft.unit_id} onChange={(e) => setEditDraft({ ...editDraft, unit_id: e.target.value })} style={editInputStyle} />
+                        </td>
+                        <td style={tdStyle}>
+                          <input value={editDraft.driver_name} onChange={(e) => setEditDraft({ ...editDraft, driver_name: e.target.value })} style={editInputStyle} />
+                        </td>
+                        <td style={tdStyle}>
+                          <input value={editDraft.driver_id} onChange={(e) => setEditDraft({ ...editDraft, driver_id: e.target.value })} style={editInputStyle} />
+                        </td>
+                        <td style={tdStyle}>
+                          <input type="date" value={editDraft.start_date} onChange={(e) => setEditDraft({ ...editDraft, start_date: e.target.value })} style={editInputStyle} />
+                        </td>
+                        <td style={tdStyle}>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="date"
+                              value={editDraft.end_date}
+                              onChange={(e) => setEditDraft({ ...editDraft, end_date: e.target.value })}
+                              style={{ ...editInputStyle, flex: 1 }}
+                            />
+                            <label className="flex items-center gap-1 cursor-pointer" style={{ fontSize: 10, color: 'var(--text-muted)' }} title="Active = no end date">
+                              <input
+                                type="checkbox"
+                                checked={editDraft.end_date === ''}
+                                onChange={(e) => setEditDraft({ ...editDraft, end_date: e.target.checked ? '' : isoToYMD(new Date().toISOString()) })}
+                                style={{ accentColor: 'var(--severity-low)' }}
+                              />
+                              active
+                            </label>
+                          </div>
+                        </td>
+                        <td style={{ ...tdStyle, textAlign: 'right' }}>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={saveEdit}
+                              disabled={savingEdit}
+                              title="Save"
+                              style={iconBtnStyle('var(--severity-low)')}
+                            >
+                              {savingEdit ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={12} />}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              disabled={savingEdit}
+                              title="Cancel"
+                              style={iconBtnStyle('var(--text-muted)')}
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
+                  return (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={tdStyle}><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{a.unit_id}</span></td>
+                      <td style={tdStyle}>{a.driver_name}</td>
+                      <td style={tdStyle}><span style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{a.driver_id}</span></td>
+                      <td style={tdStyle}>{new Date(a.start_date).toLocaleDateString()}</td>
+                      <td style={tdStyle}>{a.end_date ? new Date(a.end_date).toLocaleDateString() : <span style={{ color: 'var(--severity-low)', fontWeight: 600 }}>active</span>}</td>
+                      <td style={{ ...tdStyle, textAlign: 'right' }}>
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => startEdit(a)}
+                            title="Edit"
+                            style={iconBtnStyle('var(--text-muted)')}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            onClick={() => setDeleteId(a.id)}
+                            title="Delete"
+                            style={iconBtnStyle('var(--text-muted)')}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -648,6 +832,47 @@ function IdleView({
           </div>
         )}
       </div>
+
+      <AssignmentModal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onSaved={() => setLocalReloadKey((k) => k + 1)}
+      />
+
+      {deleteId && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+          onClick={() => setDeleteId(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--border-default)', borderRadius: 12, padding: 20, width: 360, boxShadow: '0 8px 32px rgba(0,0,0,0.45)' }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle size={16} style={{ color: 'var(--severity-critical)' }} />
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Delete this assignment?</h3>
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.55, marginBottom: 16 }}>
+              This removes the row from the assignments table. The Samsara report will fall back to the
+              raw message-text capture for any alerts that were resolving against it.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteId(null)}
+                style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'transparent', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteId && confirmDelete(deleteId)}
+                style={{ padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, background: 'var(--severity-critical)', border: 'none', color: '#fff', cursor: 'pointer' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
@@ -685,6 +910,23 @@ function pagerBtnStyle(disabled: boolean): React.CSSProperties {
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1,
   }
+}
+
+function iconBtnStyle(color: string): React.CSSProperties {
+  return {
+    width: 24, height: 24,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 5,
+    background: 'transparent', border: '1px solid var(--border-subtle)',
+    color, cursor: 'pointer',
+  }
+}
+
+const editInputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '4px 8px', borderRadius: 5, fontSize: 12,
+  background: 'var(--bg-card)', border: '1px solid var(--border-default)',
+  color: 'var(--text-primary)', outline: 'none',
 }
 
 /* ─── Mapper ─────────────────────────────────────────────────────────────── */

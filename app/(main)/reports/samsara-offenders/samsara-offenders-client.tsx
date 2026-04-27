@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
   Printer, AlertTriangle, ArrowUp, ArrowDown, Minus,
@@ -9,6 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { buildDateRange } from '@/components/ui/date-filter'
+import { UnmappedEventsPanel } from '@/components/reports/UnmappedEventsPanel'
 
 export type RangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
 
@@ -60,14 +62,18 @@ export type CriticalRow = {
 }
 
 interface Props {
-  from:     string
-  to:       string
-  preset:   RangePreset
-  overview: OverviewData | null
-  drivers:  DriverRow[]
-  units:    UnitRow[]
-  critical: CriticalRow[]
+  from:           string
+  to:             string
+  preset:         RangePreset
+  overview:       OverviewData | null
+  drivers:        DriverRow[]
+  driversTotal:   number
+  units:          UnitRow[]
+  unitsTotal:     number
+  critical:       CriticalRow[]
 }
+
+const PAGE_SIZE = 25
 
 const CRITICAL_META: Record<CriticalRow['alertType'], { label: string; color: string; icon: React.ElementType }> = {
   crash:           { label: 'Crash / Impact',     color: 'var(--severity-critical)', icon: AlertTriangle },
@@ -135,6 +141,27 @@ function ListPreview({ items, hover }: { items: string[]; hover?: string }) {
       <span style={{ cursor: 'help' }}>{inline}</span>
     </HoverTip>
   )
+}
+
+/**
+ * Inline Top Issues string for a driver row — replaces six per-category
+ * columns with a single readable cell. Sorted by count desc; only
+ * non-zero categories rendered.
+ */
+function topIssues(d: DriverRow): string {
+  const items: Array<[string, number]> = [
+    ['Speeding',     d.speeding],
+    ['Idle',         d.idle],
+    ['Fuel Low',     d.fuelLow],
+    ['Harsh Brake',  d.harshBrake],
+    ['Distraction',  d.distraction],
+    ['DEF',          d.def],
+  ]
+  return items
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => `${name} ${n}`)
+    .join(' · ')
 }
 
 function categoriesHit(d: DriverRow): string[] {
@@ -206,13 +233,31 @@ function coachingForUnit(u: UnitRow): string {
   return `Unit ${u.unitId} had ${u.faultCount} faults — schedule routine maintenance check.`
 }
 
-export function SamsaraOffendersClient({ from, to, preset, overview, drivers, units, critical }: Props) {
+export function SamsaraOffendersClient({ from, to, preset, overview, drivers, driversTotal, units, unitsTotal, critical }: Props) {
   const router = useRouter()
   const [showCustom, setShowCustom] = useState(false)
+  const [showUnmapped, setShowUnmapped] = useState(false)
   // Records (not Sets) for accordion expand state — avoids Set iteration which
   // hits this project's downlevelIteration TS limit.
   const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
   const [eventOpen, setEventOpen] = useState<Record<number, boolean>>({})
+
+  // Watchlist pagination — defaults to top-25 (server-provided). "Show all"
+  // toggles to a paginated view that re-fetches client-side on page change.
+  const driverPag = useWatchlistPagination<DriverRow>({
+    rpcName: 'get_samsara_driver_offenders',
+    initialRows: drivers,
+    total: driversTotal,
+    fromISO: from, toISO: to,
+    mapRow: mapDriverRow,
+  })
+  const unitPag = useWatchlistPagination<UnitRow>({
+    rpcName: 'get_samsara_unit_offenders',
+    initialRows: units,
+    total: unitsTotal,
+    fromISO: from, toISO: to,
+    mapRow: mapUnitRow,
+  })
 
   const criticalGroups = useMemo(() => {
     const order: CriticalRow['alertType'][] = ['crash', 'severe_speeding', 'distraction']
@@ -368,16 +413,20 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
           <KPI label="Critical Tier"  value={overview?.criticalCount ?? 0} sub={<>crash + distraction</>} valueColor="var(--severity-critical)" />
         </div>
 
-        {/* Unmapped-drivers data-quality pill */}
+        {/* Unmapped-drivers data-quality pill — clickable to open drilldown */}
         {overview && overview.unmappedDrivers > 0 && (
-          <div
-            className="no-print flex items-center gap-2 rounded-lg flex-wrap"
+          <button
+            onClick={() => setShowUnmapped(true)}
+            className="no-print flex items-center gap-2 rounded-lg flex-wrap text-left"
             style={{
               padding: '8px 14px',
               background: 'rgba(227,179,65,0.08)',
               border: '1px solid rgba(227,179,65,0.25)',
               alignSelf: 'flex-start',
+              cursor: 'pointer',
             }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(227,179,65,0.14)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(227,179,65,0.08)' }}
           >
             <AlertTriangle size={13} style={{ color: 'var(--severity-high)' }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -386,19 +435,25 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               · alerts may predate the assignment file or reference units not in the TMS export
             </span>
-            <a
-              href="/sources?tab=drivers"
-              style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', marginLeft: 4 }}
-            >
-              Manage →
-            </a>
-          </div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', marginLeft: 4 }}>
+              Drilldown →
+            </span>
+          </button>
         )}
+
+        {/* Unmapped events side panel */}
+        <UnmappedEventsPanel
+          open={showUnmapped}
+          onClose={() => setShowUnmapped(false)}
+          fromISO={from}
+          toISO={to}
+          onChanged={() => router.refresh()}
+        />
 
         {/* ── 1. Driver Watchlist ── */}
         <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <SectionHeader number="1" title="Driver Watchlist" subtitle="Top 10 drivers by risk score (distraction × 5 + speeding/harsh-brake/DEF × 3 + idle/fuel-low × 1)" icon={User} />
-          {drivers.length === 0 ? (
+          <SectionHeader number="1" title="Driver Watchlist" subtitle="Drivers by risk score (distraction × 5 + speeding/harsh-brake/DEF × 3 + idle/fuel-low × 1)" icon={User} />
+          {driverPag.rows.length === 0 ? (
             <EmptySection text="No driver-attributed Samsara alerts in this window." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -406,15 +461,10 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left' }}>
                     <Th>#</Th>
-                    <Th>Driver</Th>
+                    <Th sticky>Driver</Th>
                     <Th>Unit(s)</Th>
                     <Th align="right">Total</Th>
-                    <Th align="right">Speeding</Th>
-                    <Th align="right">Harsh Brake</Th>
-                    <Th align="right">Idle</Th>
-                    <Th align="right">Fuel Low</Th>
-                    <Th align="right">Distract.</Th>
-                    <Th align="right">DEF</Th>
+                    <Th>Top Issues</Th>
                     <Th>Cross-cat</Th>
                     <Th>Last Alert</Th>
                     <Th align="right">
@@ -436,15 +486,16 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                   </tr>
                 </thead>
                 <tbody>
-                  {drivers.map((d, i) => {
+                  {driverPag.rows.map((d, i) => {
                     const isWorst = d.riskScore >= 100
+                    const rank    = driverPag.page * PAGE_SIZE + i + 1
                     return (
                       <tr key={d.driverId} style={{
                         borderBottom: '1px solid var(--border-subtle)',
                         background: isWorst ? 'rgba(248,81,73,0.05)' : 'transparent',
                       }}>
-                        <Td>{i + 1}</Td>
-                        <Td>
+                        <Td>{rank}</Td>
+                        <Td sticky bgRow={isWorst ? 'rgba(248,81,73,0.05)' : 'var(--bg-surface)'}>
                           <div className="flex flex-col">
                             <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                               {d.isResolved && d.driverName ? d.driverName : d.driverId}
@@ -458,12 +509,11 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                           <ListPreview items={d.unitsDriven} />
                         </Td>
                         <Td align="right" bold>{d.totalAlerts}</Td>
-                        <Td align="right">{d.speeding || '—'}</Td>
-                        <Td align="right">{d.harshBrake || '—'}</Td>
-                        <Td align="right">{d.idle || '—'}</Td>
-                        <Td align="right">{d.fuelLow || '—'}</Td>
-                        <Td align="right">{d.distraction || '—'}</Td>
-                        <Td align="right">{d.def || '—'}</Td>
+                        <Td>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                            {topIssues(d) || '—'}
+                          </span>
+                        </Td>
                         <Td>
                           {d.alertTypesHit >= 3 ? (
                             <HoverTip label={categoriesHit(d).join(' · ')}>
@@ -493,12 +543,13 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
               </table>
             </div>
           )}
+          <WatchlistFooter pag={driverPag} label="drivers" />
         </section>
 
         {/* ── 2. Unit Watchlist ── */}
         <section className="report-card rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <SectionHeader number="2" title="Unit Watchlist" subtitle="Top 10 units by vehicle-fault count and distinct SPN/FMI codes" icon={Truck} />
-          {units.length === 0 ? (
+          <SectionHeader number="2" title="Unit Watchlist" subtitle="Units by vehicle-fault count and distinct SPN/FMI codes" icon={Truck} />
+          {unitPag.rows.length === 0 ? (
             <EmptySection text="No unit-attributed Samsara alerts in this window." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -516,14 +567,15 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
                   </tr>
                 </thead>
                 <tbody>
-                  {units.map((u, i) => {
+                  {unitPag.rows.map((u, i) => {
                     const isLemon = u.faultCount >= 20 && u.faultCodesDistinct >= 5
+                    const rank = unitPag.page * PAGE_SIZE + i + 1
                     return (
                       <tr key={u.unitId} style={{
                         borderBottom: '1px solid var(--border-subtle)',
                         background: isLemon ? 'rgba(248,81,73,0.05)' : 'transparent',
                       }}>
-                        <Td>{i + 1}</Td>
+                        <Td>{rank}</Td>
                         <Td><span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>{u.unitId}</span></Td>
                         <Td><ListPreview items={u.drivers} /></Td>
                         <Td align="right" bold>{u.faultCount}</Td>
@@ -544,6 +596,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, un
               </table>
             </div>
           )}
+          <WatchlistFooter pag={unitPag} label="units" />
         </section>
 
         {/* ── 3. Critical Events (two-level accordion) ── */}
@@ -801,33 +854,225 @@ function EmptySection({ text }: { text: string }) {
   )
 }
 
-function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
+function Th({ children, align = 'left', sticky = false }: { children: React.ReactNode; align?: 'left' | 'right'; sticky?: boolean }) {
   return (
-    <th style={{
-      padding: '10px 14px',
-      fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
-      color: 'var(--text-muted)', textAlign: align,
-    }}>
+    <th
+      style={{
+        padding: '10px 14px',
+        fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+        color: 'var(--text-muted)', textAlign: align,
+        ...(sticky ? { position: 'sticky', left: 0, background: 'var(--bg-surface)', zIndex: 2 } : null),
+      }}
+    >
       {children}
     </th>
   )
 }
 
-function Td({ children, align = 'left', bold = false }: { children: React.ReactNode; align?: 'left' | 'right'; bold?: boolean }) {
+function Td({
+  children, align = 'left', bold = false, sticky = false, bgRow,
+}: {
+  children: React.ReactNode; align?: 'left' | 'right'; bold?: boolean
+  sticky?: boolean; bgRow?: string
+}) {
   return (
-    <td style={{
-      padding: '10px 14px',
-      fontSize: 12,
-      color: 'var(--text-secondary)',
-      textAlign: align,
-      fontWeight: bold ? 700 : 400,
-    }}>
+    <td
+      style={{
+        padding: '10px 14px',
+        fontSize: 12,
+        color: 'var(--text-secondary)',
+        textAlign: align,
+        fontWeight: bold ? 700 : 400,
+        ...(sticky ? { position: 'sticky', left: 0, background: bgRow ?? 'var(--bg-surface)', zIndex: 1 } : null),
+      }}
+    >
       {children}
     </td>
   )
 }
 
 /* ─── Custom range modal ─────────────────────────────────────────────────── */
+
+/* ─── Watchlist pagination hook ──────────────────────────────────────────── */
+
+type WatchlistPagination<T> = {
+  rows:           T[]
+  expanded:       boolean
+  page:           number
+  totalPages:     number
+  total:          number
+  loading:        boolean
+  showAll:        () => void
+  collapse:       () => void
+  next:           () => void
+  prev:           () => void
+}
+
+type PaginationOpts<T> = {
+  rpcName:     'get_samsara_driver_offenders' | 'get_samsara_unit_offenders'
+  initialRows: T[]
+  total:       number
+  fromISO:     string
+  toISO:       string
+  mapRow:      (raw: Record<string, unknown>) => T
+}
+
+function useWatchlistPagination<T>(opts: PaginationOpts<T>): WatchlistPagination<T> {
+  const { rpcName, initialRows, total, fromISO, toISO, mapRow } = opts
+  const [expanded, setExpanded] = useState(false)
+  const [page,     setPage]     = useState(0)
+  const [rows,     setRows]     = useState<T[]>(initialRows)
+  const [loading,  setLoading]  = useState(false)
+
+  // Re-seed when SSR initialRows change (date range refetch via router.refresh)
+  useEffect(() => {
+    setRows(initialRows)
+    setPage(0)
+    setExpanded(false)
+  }, [initialRows])
+
+  // Fetch on page change when expanded (page 0 reuses initialRows)
+  useEffect(() => {
+    if (!expanded) return
+    if (page === 0) {
+      setRows(initialRows)
+      return
+    }
+    let cancelled = false
+    const supabase = createClient()
+    setLoading(true)
+    supabase
+      .rpc(rpcName, {
+        p_start:  fromISO,
+        p_end:    toISO,
+        p_limit:  PAGE_SIZE,
+        p_offset: page * PAGE_SIZE,
+      })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          console.error(`[watchlist:${rpcName}] fetch failed:`, error)
+        } else {
+          setRows((data ?? []).map((r: unknown) => mapRow(r as Record<string, unknown>)))
+        }
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [expanded, page, fromISO, toISO, rpcName, initialRows, mapRow])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  return {
+    rows, expanded, page, totalPages, total, loading,
+    showAll:  () => setExpanded(true),
+    collapse: () => { setExpanded(false); setPage(0); setRows(initialRows) },
+    next:     () => setPage((p) => Math.min(totalPages - 1, p + 1)),
+    prev:     () => setPage((p) => Math.max(0, p - 1)),
+  }
+}
+
+function mapDriverRow(r: Record<string, unknown>): DriverRow {
+  return {
+    driverId:      r.driver_id as string,
+    driverName:    (r.driver_name as string | null) ?? null,
+    isResolved:    Boolean(r.is_resolved),
+    totalAlerts:   Number(r.total_alerts ?? 0),
+    speeding:      Number(r.speeding_count ?? 0),
+    harshBrake:    Number(r.harsh_brake_count ?? 0),
+    idle:          Number(r.idle_count ?? 0),
+    fuelLow:       Number(r.fuel_low_count ?? 0),
+    distraction:   Number(r.distraction_count ?? 0),
+    def:           Number(r.def_count ?? 0),
+    alertTypesHit: Number(r.alert_types_hit ?? 0),
+    lastAlertAt:   r.last_alert_at as string,
+    riskScore:     Number(r.risk_score ?? 0),
+    unitsDriven:   (r.units_driven as string[] | null) ?? [],
+  }
+}
+function mapUnitRow(r: Record<string, unknown>): UnitRow {
+  return {
+    unitId:             r.unit_id as string,
+    faultCount:         Number(r.fault_count ?? 0),
+    faultCodesDistinct: Number(r.fault_codes_distinct ?? 0),
+    idleCount:          Number(r.idle_count ?? 0),
+    totalAlerts:        Number(r.total_alerts ?? 0),
+    lastAlertAt:        r.last_alert_at as string,
+    drivers:            (r.drivers as string[] | null) ?? [],
+  }
+}
+
+/* Watchlist footer: "Showing X of N · Show all" or pager controls */
+function WatchlistFooter<T>({ pag, label }: { pag: WatchlistPagination<T>; label: string }) {
+  const { rows, expanded, page, totalPages, total, loading, showAll, collapse, next, prev } = pag
+  if (total <= PAGE_SIZE && !expanded) return null
+  const fromIdx = total === 0 ? 0 : page * PAGE_SIZE + 1
+  const toIdx   = page * PAGE_SIZE + rows.length
+
+  return (
+    <div
+      className="no-print flex items-center gap-3 flex-wrap"
+      style={{ padding: '10px 20px', borderTop: '1px solid var(--border-subtle)' }}
+    >
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        {expanded
+          ? `Showing ${fromIdx.toLocaleString()}–${toIdx.toLocaleString()} of ${total.toLocaleString()} ${label}`
+          : `Showing ${rows.length.toLocaleString()} of ${total.toLocaleString()} ${label}`}
+        {loading && <Loader2Inline />}
+      </span>
+      <div className="flex items-center gap-2" style={{ marginLeft: 'auto' }}>
+        {!expanded ? (
+          <button
+            onClick={showAll}
+            style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          >
+            Show all ({total.toLocaleString()}) →
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={prev}
+              disabled={page === 0}
+              style={pagerBtnStyle(page === 0)}
+            >
+              ‹ Prev
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '0 4px' }}>
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              onClick={next}
+              disabled={page + 1 >= totalPages}
+              style={pagerBtnStyle(page + 1 >= totalPages)}
+            >
+              Next ›
+            </button>
+            <button
+              onClick={collapse}
+              style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', marginLeft: 8 }}
+            >
+              Collapse to top {PAGE_SIZE}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Loader2Inline() {
+  return <span style={{ marginLeft: 6, color: 'var(--text-muted)' }}>· refreshing…</span>
+}
+
+function pagerBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: 'transparent',
+    border: '1px solid var(--border-subtle)',
+    color: disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
+  }
+}
 
 function CustomRangeModal({
   initialFrom, initialTo, onApply, onClose,

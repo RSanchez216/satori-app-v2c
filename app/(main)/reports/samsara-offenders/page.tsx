@@ -46,17 +46,21 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
 
   const supabase = createClient()
 
-  const [overviewRes, driversRes, unitsRes, criticalRes] = await Promise.all([
-    supabase.rpc('get_samsara_overview',         { p_start: fromISO, p_end: toISO }).single(),
-    supabase.rpc('get_samsara_driver_offenders', { p_start: fromISO, p_end: toISO, p_limit: 10 }),
-    supabase.rpc('get_samsara_unit_offenders',   { p_start: fromISO, p_end: toISO, p_limit: 10 }),
-    supabase.rpc('get_samsara_critical_events',  { p_start: fromISO, p_end: toISO, p_limit: 50 }),
+  const [overviewRes, driversRes, unitsRes, criticalRes, driverCountRes, unitCountRes] = await Promise.all([
+    supabase.rpc('get_samsara_overview',           { p_start: fromISO, p_end: toISO }).single(),
+    supabase.rpc('get_samsara_driver_offenders',   { p_start: fromISO, p_end: toISO, p_limit: 25, p_offset: 0 }),
+    supabase.rpc('get_samsara_unit_offenders',     { p_start: fromISO, p_end: toISO, p_limit: 25, p_offset: 0 }),
+    supabase.rpc('get_samsara_critical_events',    { p_start: fromISO, p_end: toISO, p_limit: 50 }),
+    supabase.rpc('count_samsara_driver_offenders', { p_start: fromISO, p_end: toISO }),
+    supabase.rpc('count_samsara_unit_offenders',   { p_start: fromISO, p_end: toISO }),
   ])
 
-  if (overviewRes.error)  console.error('[samsara-offenders] overview:',  overviewRes.error)
-  if (driversRes.error)   console.error('[samsara-offenders] drivers:',   driversRes.error)
-  if (unitsRes.error)     console.error('[samsara-offenders] units:',     unitsRes.error)
-  if (criticalRes.error)  console.error('[samsara-offenders] critical:',  criticalRes.error)
+  if (overviewRes.error)    console.error('[samsara-offenders] overview:',     overviewRes.error)
+  if (driversRes.error)     console.error('[samsara-offenders] drivers:',      driversRes.error)
+  if (unitsRes.error)       console.error('[samsara-offenders] units:',        unitsRes.error)
+  if (criticalRes.error)    console.error('[samsara-offenders] critical:',     criticalRes.error)
+  if (driverCountRes.error) console.error('[samsara-offenders] driver count:', driverCountRes.error)
+  if (unitCountRes.error)   console.error('[samsara-offenders] unit count:',   unitCountRes.error)
 
   const overview: OverviewData | null = overviewRes.data ? {
     totalAlerts:         Number((overviewRes.data as Record<string, unknown>).total_alerts ?? 0),
@@ -105,6 +109,9 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
     occurredAt:  r.occurred_at as string,
   }))
 
+  const driversTotal = Number((driverCountRes.data as unknown as number | null) ?? drivers.length)
+  const unitsTotal   = Number((unitCountRes.data   as unknown as number | null) ?? units.length)
+
   return (
     <SamsaraOffendersClient
       from={fromISO}
@@ -112,7 +119,9 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
       preset={preset}
       overview={overview}
       drivers={drivers}
+      driversTotal={driversTotal}
       units={units}
+      unitsTotal={unitsTotal}
       critical={critical}
     />
   )
