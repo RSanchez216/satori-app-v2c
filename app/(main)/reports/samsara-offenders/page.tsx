@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { buildDateRange } from '@/lib/date-range'
 import { SamsaraOffendersClient } from './samsara-offenders-client'
 import type { OverviewData, DriverRow, UnitRow, CriticalRow, RangePreset } from './samsara-offenders-client'
 
@@ -13,14 +14,13 @@ function isPreset(v: string | undefined): v is RangePreset {
 }
 
 export default async function SamsaraOffendersPage({ searchParams }: Props) {
-  const now    = new Date()
-  const sevenD = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
-
-  // Resolve range. Default = last 7 days.
-  // For today/yesterday/custom, the client always pushes from/to in the URL
+  // Resolve range. Default = Today (CT midnight → next CT midnight).
+  // For today/yesterday/custom, the client pushes from/to in the URL
   // (computed via buildDateRange which uses CT-midnight math); the server
-  // trusts those bounds. 7d/30d have server-side defaults so URLs stay clean.
-  let preset: RangePreset = isPreset(searchParams.preset) ? searchParams.preset : '7d'
+  // trusts those bounds. 7d/30d have server-side defaults so shared URLs
+  // stay clean. The no-params landing case also uses buildDateRange so the
+  // Today window aligns to CT midnight, matching the Dashboard.
+  let preset: RangePreset = isPreset(searchParams.preset) ? searchParams.preset : 'today'
   let fromISO: string
   let toISO:   string
 
@@ -31,17 +31,20 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
       fromISO = f.toISOString()
       toISO   = t.toISOString()
     } else {
-      preset  = '7d'
-      fromISO = sevenD.toISOString()
-      toISO   = now.toISOString()
+      const r = buildDateRange('today')
+      preset  = 'today'
+      fromISO = r.from
+      toISO   = r.to
     }
-  } else if (preset === '30d') {
-    fromISO = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    toISO   = now.toISOString()
+  } else if (preset === '7d' || preset === '30d') {
+    const r = buildDateRange(preset)
+    fromISO = r.from
+    toISO   = r.to
   } else {
-    preset  = '7d'
-    fromISO = sevenD.toISOString()
-    toISO   = now.toISOString()
+    const r = buildDateRange('today')
+    preset  = 'today'
+    fromISO = r.from
+    toISO   = r.to
   }
 
   const supabase = createClient()
