@@ -208,16 +208,19 @@ function dominantDriverIssue(d: DriverRow): keyof typeof ALERT_LABELS {
 }
 
 function driverDisplayForCoaching(d: DriverRow): string {
-  // Resolved: "Dzhovid Ochildiev (1830) on Unit M83" (most-driven unit shown when 1, else "Unit X+more")
-  // Unresolved: "Driver M83" (legacy fallback wording so the report still reads naturally)
+  // Resolved:   "Dzhovid Ochildiev (1830) on Unit M83"
+  // Unresolved: "Driver M83 on Unit M83" — "Driver" prefix keeps the sentence
+  //             grammatical when no human name is available; unit clause is
+  //             appended in both branches so the recommendation reads the
+  //             same shape either way.
+  const unitClause =
+    d.unitsDriven.length === 1 ? ` on Unit ${d.unitsDriven[0]}`
+    : d.unitsDriven.length > 1  ? ` on Units ${d.unitsDriven.slice(0, 2).join(', ')}${d.unitsDriven.length > 2 ? '+more' : ''}`
+    : ''
   if (d.isResolved && d.driverName) {
-    const unitClause =
-      d.unitsDriven.length === 1 ? ` on Unit ${d.unitsDriven[0]}`
-      : d.unitsDriven.length > 1  ? ` on Units ${d.unitsDriven.slice(0, 2).join(', ')}${d.unitsDriven.length > 2 ? '+more' : ''}`
-      : ''
     return `${d.driverName} (${d.driverId})${unitClause}`
   }
-  return `Driver ${d.driverId}`
+  return `Driver ${d.driverId}${unitClause}`
 }
 
 function coachingForDriver(d: DriverRow): string {
@@ -523,10 +526,19 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                       <Td sticky stickyLeft={0} bgRow={rowBg}>{rank}</Td>
                       <Td sticky stickyLeft={48} bgRow={rowBg}>
                         <div className="flex flex-col">
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          <span style={{
+                            fontWeight: 600,
+                            color: 'var(--text-primary)',
+                            fontFamily: d.isResolved && d.driverName ? 'inherit' : 'monospace',
+                          }}>
                             {d.isResolved && d.driverName ? d.driverName : d.driverId}
                           </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: d.isResolved ? 'monospace' : 'inherit' }}>
+                          <span style={{
+                            fontSize: 10,
+                            color: 'var(--text-muted)',
+                            fontFamily: d.isResolved && d.driverName ? 'monospace' : 'inherit',
+                            fontStyle:  d.isResolved && d.driverName ? 'normal'    : 'italic',
+                          }}>
                             {d.isResolved && d.driverName ? d.driverId : 'unmapped'}
                           </span>
                         </div>
@@ -728,7 +740,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                    Driver{' '}
+                                    Driver:{' '}
                                     {c.driverName ? (
                                       <>
                                         <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{c.driverName}</span>
@@ -742,8 +754,10 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                                       </span>
                                     )}
                                   </span>
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }} aria-hidden="true">·</span>
                                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                    Unit <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.unitId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                                    Unit:{' '}
+                                    <span style={{ fontFamily: 'monospace', fontWeight: 600, color: c.unitId ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
                                       {c.unitId ?? '—'}
                                     </span>
                                   </span>
