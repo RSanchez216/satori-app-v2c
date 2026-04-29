@@ -527,17 +527,15 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                       <Td sticky stickyLeft={48} bgRow={rowBg}>
                         <div className="flex flex-col">
                           <span style={{
-                            fontWeight: 600,
+                            fontWeight: 500,
                             color: 'var(--text-primary)',
-                            fontFamily: d.isResolved && d.driverName ? 'inherit' : 'monospace',
                           }}>
                             {d.isResolved && d.driverName ? d.driverName : d.driverId}
                           </span>
                           <span style={{
-                            fontSize: 10,
+                            fontSize: 12,
                             color: 'var(--text-muted)',
                             fontFamily: d.isResolved && d.driverName ? 'monospace' : 'inherit',
-                            fontStyle:  d.isResolved && d.driverName ? 'normal'    : 'italic',
                           }}>
                             {d.isResolved && d.driverName ? d.driverId : 'unmapped'}
                           </span>
