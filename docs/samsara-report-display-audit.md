@@ -67,6 +67,31 @@ resolved-driver pattern is applied consistently:
   by count desc per unit. Migration:
   [supabase/migrations/20260506_samsara_unit_top_issues.sql](supabase/migrations/20260506_samsara_unit_top_issues.sql).
 
+## Polish pass (post Phase 2)
+
+- J1939 lookup expanded with 15 high-frequency codes from Phase 1
+  discovery findings (SCR Reagent Heater 4374-x, SCR Inducement 5443-0 /
+  5444-1, SCR Catalyst Service 5298-14, Coolant Pressure 1089-4,
+  Water-in-Fuel 97-4, Multi-cylinder Misfire 1322-31, J1939 Network
+  639-2 / 639-14, Sensor Supply 3509-3, Brake Air 792-5, Aux Temp 241-1,
+  Wheel Speed 84-0). Total entries 53 → 68. Estimated event-volume
+  coverage now ~78% on current 30-day window, up from ~11%.
+- Proprietary 520xxx codes documented as a known limitation at the top
+  of the lookup table (require vehicle-make capture — deferred).
+- Top Issues count format: `Description N` → `Description × N` with
+  tabular-nums + 0.8 opacity on the count so the description reads as
+  primary. Hover tooltip for `+N more` uses the same `× N` style.
+- Unit Watchlist now filters `fault_count > 0` — zero-fault / idle-only
+  units removed from the list. Companion `count_samsara_unit_offenders`
+  RPC also filtered so the `Show all (N)` footer matches the visible
+  row count. Migration:
+  [supabase/migrations/20260507_samsara_filter_zero_fault_units.sql](supabase/migrations/20260507_samsara_filter_zero_fault_units.sql).
+- "Issue Types" header: applied `whiteSpace: 'nowrap'` to the inner
+  inline-flex span and bumped the column hint from 110 → 120 so the
+  label fits on one line without compressing adjacent columns. (If
+  this still wraps in dev, fall back to shortening the visible label
+  to "Types" — tooltip content unchanged.)
+
 ## Deferred
 
 - **Concern D — Unit Watchlist hides unresolved drivers**: the Unit

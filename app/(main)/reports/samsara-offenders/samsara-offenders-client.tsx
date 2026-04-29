@@ -178,12 +178,15 @@ function TopIssues({ issues }: { issues: FaultIssue[] }) {
         >
           {i > 0 && <span style={{ marginRight: 2 }}>·</span>}
           <SeverityDot severity={it.code.severity} />
-          <span>{it.code.description} {it.count}</span>
+          <span>
+            {it.code.description}{' '}
+            <span className="tabular-nums" style={{ opacity: 0.8 }}>× {it.count}</span>
+          </span>
         </span>
       ))}
       {rest.length > 0 && (
         <HoverTip
-          label={rest.map(it => `${it.code.description} (${it.count})`).join('\n')}
+          label={rest.map(it => `${it.code.description} × ${it.count}`).join('\n')}
         >
           <span style={{ color: 'var(--text-muted)', cursor: 'help', whiteSpace: 'nowrap' }}>
             +{rest.length} more
@@ -664,7 +667,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                 <col />                       {/* Driver(s) — flex */}
                 <col style={{ width: 80 }}  />{/* Faults */}
                 <col />                       {/* Top Issues — flex */}
-                <col style={{ width: 110 }} />{/* Issue Types */}
+                <col style={{ width: 120 }} />{/* Issue Types */}
                 <col style={{ width: 64 }}  />{/* Idle */}
                 <col style={{ width: 64 }}  />{/* Total */}
                 <col style={{ width: 96 }}  />{/* Last alert */}
@@ -677,7 +680,10 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                   <Th align="right">Faults</Th>
                   <Th>Top Issues</Th>
                   <Th align="right">
-                    <span className="inline-flex items-center gap-1" style={{ justifyContent: 'flex-end', width: '100%' }}>
+                    <span
+                      className="inline-flex items-center gap-1"
+                      style={{ justifyContent: 'flex-end', width: '100%', whiteSpace: 'nowrap' }}
+                    >
                       Issue Types
                       <HoverTip label={'Number of distinct fault types this unit produced — chronic single issue vs. scattered problems.\n\nBolded red when ≥ 5 different types in the window.'}>
                         <Info size={11} style={{ color: 'var(--text-muted)', cursor: 'help' }} />

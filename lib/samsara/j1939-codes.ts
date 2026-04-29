@@ -43,6 +43,18 @@ export interface FaultCode {
 const codeKey = (spn: number, fmi: number) => `${spn}-${fmi}`
 
 const J1939_TABLE: Record<string, FaultCode> = {
+  /*
+   * Proprietary SPN range (520192–524287) is intentionally NOT covered.
+   * These are manufacturer-specific (Cummins / Detroit / PACCAR / Volvo)
+   * and the meaning of a given SPN+FMI pair varies by OEM. Decoding them
+   * requires capturing vehicle make alongside the message and shipping
+   * OEM-specific lookup tables. Until then, proprietary codes render as
+   * raw `SPN x/FMI y` in grey, which is honest rather than guess-decoded.
+   *
+   * Top observed proprietary codes in current data (for future OEM work):
+   *   520349-14, 520966-1, 520245-1, 521031-18, 520240-9, 520363-5
+   */
+
   // ── Engine Oil ─────────────────────────────────────────────
   '100-1':  { spn: 100, fmi: 1,  description: 'Low Oil Pressure (Severe)',         severity: 'critical', category: 'oil' },
   '100-18': { spn: 100, fmi: 18, description: 'Low Oil Pressure (Moderate)',       severity: 'critical', category: 'oil' },
@@ -58,12 +70,17 @@ const J1939_TABLE: Record<string, FaultCode> = {
   '110-4':  { spn: 110, fmi: 4,  description: 'Coolant Temp Sensor Voltage Low',   severity: 'degraded', category: 'cooling' },
   '111-1':  { spn: 111, fmi: 1,  description: 'Low Coolant Level (Severe)',        severity: 'critical', category: 'cooling' },
   '111-18': { spn: 111, fmi: 18, description: 'Low Coolant Level (Moderate)',      severity: 'warning',  category: 'cooling' },
+  '1089-4': { spn: 1089, fmi: 4, description: 'Coolant Pressure Sensor Voltage Low', severity: 'degraded', category: 'cooling' },
 
   // ── Engine Speed / Performance ─────────────────────────────
   '190-0':  { spn: 190, fmi: 0,  description: 'Engine Overspeed',                  severity: 'critical', category: 'engine' },
   '190-16': { spn: 190, fmi: 16, description: 'Engine Speed High',                 severity: 'warning',  category: 'engine' },
   '102-3':  { spn: 102, fmi: 3,  description: 'Boost Pressure Sensor High',        severity: 'degraded', category: 'engine' },
   '102-4':  { spn: 102, fmi: 4,  description: 'Boost Pressure Sensor Low',         severity: 'degraded', category: 'engine' },
+  // ── Misfire / Aux / Wheel speed ────────────────────────────
+  '1322-31': { spn: 1322, fmi: 31, description: 'Multiple Cylinder Misfire',         severity: 'critical', category: 'engine' },
+  '241-1':   { spn: 241,  fmi: 1,  description: 'Auxiliary Temperature Low (Severe)', severity: 'warning',  category: 'engine' },
+  '84-0':    { spn: 84,   fmi: 0,  description: 'Wheel Speed Above Normal',          severity: 'warning',  category: 'engine' },
 
   // ── EGR (added Phase 1 discovery: top fleet codes) ─────────
   '2659-0':  { spn: 2659, fmi: 0,  description: 'EGR Mass Flow High (Severe)',     severity: 'warning', category: 'aftertreatment' },
@@ -86,8 +103,17 @@ const J1939_TABLE: Record<string, FaultCode> = {
   '3719-16': { spn: 3719, fmi: 16, description: 'DPF Regen Needed',                severity: 'warning',  category: 'aftertreatment' },
   '4364-1':  { spn: 4364, fmi: 1,  description: 'SCR Efficiency Low',              severity: 'critical', category: 'aftertreatment' },
   '4364-17': { spn: 4364, fmi: 17, description: 'SCR Efficiency Mild',             severity: 'warning',  category: 'aftertreatment' },
+  // 4374-x — SCR Reagent Heater family, observed combined ~13 events / 30d.
+  '4374-1':  { spn: 4374, fmi: 1,  description: 'SCR Reagent Heater Below Normal',     severity: 'warning',  category: 'aftertreatment' },
+  '4374-4':  { spn: 4374, fmi: 4,  description: 'SCR Reagent Heater Voltage Low',      severity: 'degraded', category: 'aftertreatment' },
+  '4374-6':  { spn: 4374, fmi: 6,  description: 'SCR Reagent Heater Short to Ground', severity: 'degraded', category: 'aftertreatment' },
   '5246-0':  { spn: 5246, fmi: 0,  description: 'SCR Operator Inducement Active',  severity: 'critical', category: 'aftertreatment' },
+  // 5298-14 — SCR Catalyst Service Required (FMI 14 = Special Instructions).
+  '5298-14': { spn: 5298, fmi: 14, description: 'SCR Catalyst Service Required',   severity: 'warning',  category: 'aftertreatment' },
   '5394-7':  { spn: 5394, fmi: 7,  description: 'DEF Dosing Valve Stuck',          severity: 'warning',  category: 'aftertreatment' },
+  // 5443-0 / 5444-1 — SCR System Inducement, drives derate. Top fleet codes.
+  '5443-0':  { spn: 5443, fmi: 0,  description: 'SCR System Inducement Active',    severity: 'critical', category: 'aftertreatment' },
+  '5444-1':  { spn: 5444, fmi: 1,  description: 'SCR Inducement Severity Critical', severity: 'critical', category: 'aftertreatment' },
   // 5713-20 (DEF Pump) — 9 events.
   '5713-20': { spn: 5713, fmi: 20, description: 'DEF Pump Pressure Drifted High',  severity: 'warning',  category: 'aftertreatment' },
 
@@ -97,6 +123,7 @@ const J1939_TABLE: Record<string, FaultCode> = {
   '96-1':   { spn: 96,   fmi: 1,  description: 'Low Fuel Level (Empty)',           severity: 'warning',  category: 'fuel' },
   '96-17':  { spn: 96,   fmi: 17, description: 'Low Fuel Level',                   severity: 'warning',  category: 'fuel' },
   '96-19':  { spn: 96,   fmi: 19, description: 'Fuel Level Network Data Error',    severity: 'degraded', category: 'fuel' },
+  '97-4':   { spn: 97,   fmi: 4,  description: 'Water-in-Fuel Sensor Voltage Low', severity: 'degraded', category: 'fuel' },
 
   // ── Electrical / Battery ───────────────────────────────────
   '168-15': { spn: 168, fmi: 15, description: 'Battery Voltage High',              severity: 'warning',  category: 'electrical' },
@@ -104,11 +131,16 @@ const J1939_TABLE: Record<string, FaultCode> = {
   '168-3':  { spn: 168, fmi: 3,  description: 'Battery Voltage Sensor High',       severity: 'degraded', category: 'electrical' },
   '168-4':  { spn: 168, fmi: 4,  description: 'Battery Voltage Sensor Low',        severity: 'degraded', category: 'electrical' },
   '677-5':  { spn: 677, fmi: 5,  description: 'Starter Relay Open Circuit',        severity: 'warning',  category: 'electrical' },
+  // ── J1939 Network / Sensor Supply ──────────────────────────
+  '639-2':  { spn: 639,  fmi: 2,  description: 'J1939 Network Erratic',             severity: 'degraded', category: 'electrical' },
+  '639-14': { spn: 639,  fmi: 14, description: 'J1939 Network Special Instructions', severity: 'degraded', category: 'electrical' },
+  '3509-3': { spn: 3509, fmi: 3,  description: 'Sensor Supply Voltage 1 High',      severity: 'degraded', category: 'electrical' },
 
   // ── Brakes ─────────────────────────────────────────────────
   '521-3':  { spn: 521, fmi: 3,  description: 'Brake Pedal Sensor Voltage High',   severity: 'critical', category: 'brake' },
   '521-4':  { spn: 521, fmi: 4,  description: 'Brake Pedal Sensor Voltage Low',    severity: 'critical', category: 'brake' },
   '597-2':  { spn: 597, fmi: 2,  description: 'Brake Switch Erratic',              severity: 'critical', category: 'brake' },
+  '792-5':  { spn: 792, fmi: 5,  description: 'Brake Air Pressure Sensor Open',    severity: 'critical', category: 'brake' },
 
   // ── Transmission ───────────────────────────────────────────
   '177-0':  { spn: 177, fmi: 0,  description: 'High Transmission Oil Temp',        severity: 'warning',  category: 'transmission' },
