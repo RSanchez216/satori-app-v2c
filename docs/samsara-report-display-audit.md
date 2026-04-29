@@ -20,10 +20,11 @@ resolved-driver pattern is applied consistently:
 | 4 | Critical Events – event row header | [samsara-offenders-client.tsx:729-749](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L729-L749) | `Driver: Name (ID) · Unit: M80` | `Driver: <raw_id> · Unit: M80` (or `Driver: — · Unit: —` when both null) | ✓ |
 | 5 | Critical Events – full message panel | [samsara-offenders-client.tsx:761-778](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L761-L778) | (raw text — out of scope) | (raw text — out of scope) | N/A |
 | 6 | Coaching Recommendations – driver line | [samsara-offenders-client.tsx:210-221](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L210-L221) | `Name (ID) on Unit <id> flagged N times — top issue: ...` | `Driver <raw_id> on Unit <id> flagged N times — top issue: ...` | ✓ |
-| 7 | Coaching Recommendations – unit line | [samsara-offenders-client.tsx:242-250](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L242-L250) | `Unit <id> had N faults across M different SPN/FMI codes — recommend ...` | (no driver involved — unchanged) | ✓ |
+| 7 | Coaching Recommendations – unit line | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`coachingForUnit`) | `Unit <id> had N faults across M different issue types — recommend ...` | (no driver involved — unchanged) | ✓ |
 | 8 | Unmapped pill / drilldown panel | [UnmappedEventsPanel.tsx](components/reports/UnmappedEventsPanel.tsx) | (panel = unresolved by definition) — Unit, Alert Type, Count, Last Seen, Assign action | (same) | ✓ |
-| 9 | Cross-cat badge tooltip | [samsara-offenders-client.tsx:545-554](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L545-L554) | (categories list — out of scope) | (categories list — out of scope) | N/A |
-| 10 | Driver names in Show-all paginated views | [samsara-offenders-client.tsx:514-569](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx#L514-L569) (`useWatchlistPagination` + same row template) | Same row component as top-25 view | Same row component as top-25 view | ✓ |
+| 9 | Cross-cat badge tooltip | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) | (categories list — out of scope) | (categories list — out of scope) | N/A |
+| 10 | Driver names in Show-all paginated views | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`useWatchlistPagination` + same row template) | Same row component as top-25 view | Same row component as top-25 view | ✓ |
+| 11 | Unit Watchlist – Top Issues column | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`<TopIssues>` helper, line ~140s) | Top 3 decoded `(description, count)` pairs each prefixed with a severity dot, sorted by severity then count; "+N more" with HoverTip listing the rest; `—` when empty | (same — unit-side, not driver-side) | ✓ |
 
 ## Final state
 
@@ -42,6 +43,30 @@ resolved-driver pattern is applied consistently:
   `driverDisplayForCoaching`, so the recommendation copy reads uniformly
   regardless of mapping status.
 
+## Phase 2 update — fault-code decoding + severity coloring
+
+- New module [lib/samsara/j1939-codes.ts](lib/samsara/j1939-codes.ts) holds
+  the J1939 SPN/FMI lookup table, severity mapping, and a `parseFaultPair`
+  helper. Starter table covers ~50 entries spanning oil, cooling, engine,
+  EGR, aftertreatment (NOx / DPF / DEF / SCR), fuel, electrical, brakes,
+  transmission, and tire codes. Discovery work tracked in
+  [docs/samsara-fault-discovery.md](docs/samsara-fault-discovery.md).
+- "Distinct Codes" column renamed **Issue Types**, with a tooltip on the
+  header explaining the count.
+- New **Top Issues** column added to the Unit Watchlist between Faults and
+  Issue Types — top 3 decoded codes with severity dots, "+N more"
+  HoverTip for the rest. Sorted by severity (critical first) then count.
+- Critical Events accordion: events with a parseable SPN/FMI in their raw
+  payload now render a colored severity dot before the `Driver:` label,
+  with a HoverTip showing the decoded description.
+- Coaching Recommendations unit line copy follows the rename:
+  `Unit M80 had N faults across M different issue types — recommend …`
+  (driver coaching copy is unchanged).
+- RPC change: `get_samsara_unit_offenders` now returns an additional
+  `top_issues jsonb` column — array of `{spn, fmi, count}` objects sorted
+  by count desc per unit. Migration:
+  [supabase/migrations/20260506_samsara_unit_top_issues.sql](supabase/migrations/20260506_samsara_unit_top_issues.sql).
+
 ## Deferred
 
 - **Concern D — Unit Watchlist hides unresolved drivers**: the Unit
@@ -49,6 +74,11 @@ resolved-driver pattern is applied consistently:
   names. Units with events from unmapped driver IDs show those drivers as
   invisible. Surfacing them as `M80 (unmapped)` chips requires an RPC
   change and a product decision on display format. Tracked separately.
+- **OEM-proprietary fault codes (SPN ≥ 520192)** — 22% of fleet fault
+  events come from the J1939 manufacturer-proprietary range and won't
+  decode against the SAE table. Decoding requires capturing vehicle make
+  per message + per-OEM lookup tables (Cummins, Detroit, Volvo, …). Out
+  of scope for this round.
 
 ## Out of scope (per the prompt)
 

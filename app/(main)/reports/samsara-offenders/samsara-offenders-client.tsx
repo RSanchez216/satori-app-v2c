@@ -7,10 +7,14 @@ import { format, formatDistanceToNow } from 'date-fns'
 import {
   Printer, AlertTriangle, ArrowUp, ArrowDown, Minus,
   Truck, User, Calendar, Wrench, Gauge, Phone, Flame, Droplet, ZapOff,
-  ChevronRight,
+  ChevronRight, Info,
 } from 'lucide-react'
 import { buildDateRange } from '@/components/ui/date-filter'
 import { UnmappedEventsPanel } from '@/components/reports/UnmappedEventsPanel'
+import {
+  lookupFault, severityCssVar, SEVERITY_ORDER, parseFaultPair,
+  type FaultSeverity,
+} from '@/lib/samsara/j1939-codes'
 
 export type RangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
 
@@ -42,6 +46,12 @@ export type DriverRow = {
   unitsDriven:   string[]
 }
 
+export type FaultIssue = {
+  spn:   number
+  fmi:   number
+  count: number
+}
+
 export type UnitRow = {
   unitId:             string
   faultCount:         number
@@ -50,6 +60,7 @@ export type UnitRow = {
   totalAlerts:        number
   lastAlertAt:        string
   drivers:            string[]
+  topIssues:          FaultIssue[]
 }
 
 export type CriticalRow = {
@@ -124,6 +135,63 @@ function cleanExcerpt(raw: string): string {
   if (s.length > 200) s = s.slice(0, 200).trimEnd() + '…'
 
   return s
+}
+
+/**
+ * Severity-colored dot — small inline circle prefixed to a fault description.
+ * Theme-aware via `severityCssVar`.
+ */
+function SeverityDot({ severity, size = 6 }: { severity: FaultSeverity; size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        display: 'inline-block', flexShrink: 0,
+        width: size, height: size, borderRadius: '50%',
+        background: severityCssVar(severity),
+      }}
+    />
+  )
+}
+
+/**
+ * Decoded fault list for a unit row's "Top Issues" cell. Sort order:
+ *   severity ASC (critical first, unknown last) → count DESC.
+ * Show top 3 inline; if more, "+N more" with a HoverTip listing the rest.
+ */
+function TopIssues({ issues }: { issues: FaultIssue[] }) {
+  if (issues.length === 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+  const decoded = issues.map(it => ({ ...it, code: lookupFault(it.spn, it.fmi) }))
+  decoded.sort((a, b) => {
+    const sev = SEVERITY_ORDER[a.code.severity] - SEVERITY_ORDER[b.code.severity]
+    return sev !== 0 ? sev : b.count - a.count
+  })
+  const top = decoded.slice(0, 3)
+  const rest = decoded.slice(3)
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 11, lineHeight: 1.6 }}>
+      {top.map((it, i) => (
+        <span
+          key={`${it.spn}-${it.fmi}`}
+          className="inline-flex items-center gap-1"
+          style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}
+        >
+          {i > 0 && <span style={{ marginRight: 2 }}>·</span>}
+          <SeverityDot severity={it.code.severity} />
+          <span>{it.code.description} {it.count}</span>
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <HoverTip
+          label={rest.map(it => `${it.code.description} (${it.count})`).join('\n')}
+        >
+          <span style={{ color: 'var(--text-muted)', cursor: 'help', whiteSpace: 'nowrap' }}>
+            +{rest.length} more
+          </span>
+        </HoverTip>
+      )}
+    </span>
+  )
 }
 
 /**
@@ -244,10 +312,10 @@ function coachingForDriver(d: DriverRow): string {
 
 function coachingForUnit(u: UnitRow): string {
   if (u.faultCount >= 20 && u.faultCodesDistinct >= 5) {
-    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different SPN/FMI codes — recommend pulling out of rotation for shop diagnostic.`
+    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different issue types — recommend pulling out of rotation for shop diagnostic.`
   }
   if (u.faultCount >= 10) {
-    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different SPN/FMI codes — recommend shop diagnostic visit.`
+    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different issue types — recommend shop diagnostic visit.`
   }
   return `Unit ${u.unitId} had ${u.faultCount} faults — schedule routine maintenance check.`
 }
@@ -585,7 +653,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
 
         {/* ── 2. Unit Watchlist ── */}
         <section className="report-card rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <SectionHeader number="2" title="Unit Watchlist" subtitle="Units by vehicle-fault count and distinct SPN/FMI codes" icon={Truck} />
+          <SectionHeader number="2" title="Unit Watchlist" subtitle="Units by vehicle-fault count and recurring issue types" icon={Truck} />
           {unitPag.rows.length === 0 ? (
             <EmptySection text="No unit-attributed Samsara alerts in this window." />
           ) : (
@@ -595,7 +663,8 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                 <col style={{ width: 110 }} />{/* Unit */}
                 <col />                       {/* Driver(s) — flex */}
                 <col style={{ width: 80 }}  />{/* Faults */}
-                <col style={{ width: 110 }} />{/* Distinct codes */}
+                <col />                       {/* Top Issues — flex */}
+                <col style={{ width: 110 }} />{/* Issue Types */}
                 <col style={{ width: 64 }}  />{/* Idle */}
                 <col style={{ width: 64 }}  />{/* Total */}
                 <col style={{ width: 96 }}  />{/* Last alert */}
@@ -606,7 +675,15 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                   <Th sticky stickyLeft={48}>Unit</Th>
                   <Th>Driver(s)</Th>
                   <Th align="right">Faults</Th>
-                  <Th align="right">Distinct codes</Th>
+                  <Th>Top Issues</Th>
+                  <Th align="right">
+                    <span className="inline-flex items-center gap-1" style={{ justifyContent: 'flex-end', width: '100%' }}>
+                      Issue Types
+                      <HoverTip label={'Number of distinct fault types this unit produced — chronic single issue vs. scattered problems.\n\nBolded red when ≥ 5 different types in the window.'}>
+                        <Info size={11} style={{ color: 'var(--text-muted)', cursor: 'help' }} />
+                      </HoverTip>
+                    </span>
+                  </Th>
                   <Th align="right">Idle</Th>
                   <Th align="right">Total</Th>
                   <Th align="right">Last alert</Th>
@@ -628,6 +705,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                       </Td>
                       <Td><ListPreview items={u.drivers} /></Td>
                       <Td align="right" bold tabularNums>{u.faultCount}</Td>
+                      <Td><TopIssues issues={u.topIssues} /></Td>
                       <Td align="right" tabularNums>
                         {u.faultCodesDistinct >= 5 ? (
                           <span style={{ fontWeight: 700, color: 'var(--severity-critical)' }}>{u.faultCodesDistinct}</span>
@@ -715,6 +793,11 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                         const key = `${group.type}|${c.occurredAt}|${c.driverId ?? ''}|${c.unitId ?? ''}`
                         const eIdx = critical.indexOf(c)
                         const eOpen = !!eventOpen[eIdx]
+                        // Crashes / distraction / severe-speeding don't normally carry an
+                        // SPN/FMI pair, but if one is present in the raw payload (e.g. a
+                        // joint-flagged event) we surface its severity inline.
+                        const fault = parseFaultPair(c.messageFull)
+                        const faultCode = fault ? lookupFault(fault.spn, fault.fmi) : null
                         return (
                           <div key={key} style={{ borderTop: '1px solid var(--border-subtle)' }}>
                             <button
@@ -737,6 +820,13 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                               />
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
+                                  {faultCode && (
+                                    <HoverTip label={`${faultCode.description} (SPN ${faultCode.spn}/FMI ${faultCode.fmi})`}>
+                                      <span style={{ display: 'inline-flex', cursor: 'help' }}>
+                                        <SeverityDot severity={faultCode.severity} />
+                                      </span>
+                                    </HoverTip>
+                                  )}
                                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                                     Driver:{' '}
                                     {c.driverName ? (
@@ -1051,6 +1141,7 @@ function mapDriverRow(r: Record<string, unknown>): DriverRow {
   }
 }
 function mapUnitRow(r: Record<string, unknown>): UnitRow {
+  const rawIssues = (r.top_issues as Array<Record<string, unknown>> | null) ?? []
   return {
     unitId:             r.unit_id as string,
     faultCount:         Number(r.fault_count ?? 0),
@@ -1059,6 +1150,11 @@ function mapUnitRow(r: Record<string, unknown>): UnitRow {
     totalAlerts:        Number(r.total_alerts ?? 0),
     lastAlertAt:        r.last_alert_at as string,
     drivers:            (r.drivers as string[] | null) ?? [],
+    topIssues:          rawIssues.map(it => ({
+      spn:   Number(it.spn   ?? 0),
+      fmi:   Number(it.fmi   ?? 0),
+      count: Number(it.count ?? 0),
+    })),
   }
 }
 

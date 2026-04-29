@@ -93,15 +93,23 @@ export default async function SamsaraOffendersPage({ searchParams }: Props) {
     unitsDriven:   (r.units_driven as string[] | null) ?? [],
   }))
 
-  const units: UnitRow[] = (unitsRes.data ?? []).map((r: Record<string, unknown>) => ({
-    unitId:             r.unit_id as string,
-    faultCount:         Number(r.fault_count ?? 0),
-    faultCodesDistinct: Number(r.fault_codes_distinct ?? 0),
-    idleCount:          Number(r.idle_count ?? 0),
-    totalAlerts:        Number(r.total_alerts ?? 0),
-    lastAlertAt:        r.last_alert_at as string,
-    drivers:            (r.drivers as string[] | null) ?? [],
-  }))
+  const units: UnitRow[] = (unitsRes.data ?? []).map((r: Record<string, unknown>) => {
+    const rawIssues = (r.top_issues as Array<Record<string, unknown>> | null) ?? []
+    return {
+      unitId:             r.unit_id as string,
+      faultCount:         Number(r.fault_count ?? 0),
+      faultCodesDistinct: Number(r.fault_codes_distinct ?? 0),
+      idleCount:          Number(r.idle_count ?? 0),
+      totalAlerts:        Number(r.total_alerts ?? 0),
+      lastAlertAt:        r.last_alert_at as string,
+      drivers:            (r.drivers as string[] | null) ?? [],
+      topIssues:          rawIssues.map(it => ({
+        spn:   Number(it.spn   ?? 0),
+        fmi:   Number(it.fmi   ?? 0),
+        count: Number(it.count ?? 0),
+      })),
+    }
+  })
 
   const critical: CriticalRow[] = (criticalRes.data ?? []).map((r: Record<string, unknown>) => ({
     alertType:   r.alert_type as CriticalRow['alertType'],
