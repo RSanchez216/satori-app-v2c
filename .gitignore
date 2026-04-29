@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.js
 .yarn/install-state.gz
@@ -27,6 +28,7 @@ yarn-error.log*
 
 # local env files
 .env*.local
+**/.env
 
 # vercel
 .vercel
@@ -34,3 +36,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code project-local config
+.claude/
+
+# Supabase CLI cache
+supabase/.temp/
+
+# Scratch files
+diff.txt
