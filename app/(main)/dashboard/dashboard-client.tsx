@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow, format } from 'date-fns'
 import {
@@ -14,6 +14,8 @@ import { DateFilter, buildDateRange } from '@/components/ui/date-filter'
 import type { DateRange } from '@/components/ui/date-filter'
 import type { MessageContext, Alert, Source, ToriActivityLog, DashboardStats, AlertSeverity } from '@/types/database'
 import type { ViolationsSummary, TopRule, HealthScore } from './page'
+import { useLiveData, type RealtimeStatus } from '@/lib/hooks/use-live-data'
+import { LiveDot } from '@/components/ui/live-dot'
 
 export type SamsaraTier = 'critical' | 'high' | 'operational' | 'info'
 export type SamsaraAlertType =
@@ -54,12 +56,14 @@ function StatCard({
   icon: Icon,
   glowColor,
   subtext,
+  liveStatus,
 }: {
   label: string
   value: number | string
   icon: React.ElementType
   glowColor: string
   subtext?: string
+  liveStatus?: RealtimeStatus
 }) {
   return (
     <div
@@ -76,10 +80,11 @@ function StatCard({
 
       <div className="flex items-center justify-between relative">
         <span
-          className="text-xs font-semibold uppercase tracking-widest"
+          className="text-xs font-semibold uppercase tracking-widest inline-flex items-center gap-1.5"
           style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}
         >
           {label}
+          {liveStatus && <LiveDot status={liveStatus} />}
         </span>
         <div
           className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -271,7 +276,7 @@ function rangeLabels(range: DateRange): RangeLabels {
 }
 
 /* ─── Violations KPI card ──────────────────────────────────────────────── */
-function ViolationsCard({ data, range }: { data: ViolationsSummary | null; range: DateRange }) {
+function ViolationsCard({ data, range, liveStatus }: { data: ViolationsSummary | null; range: DateRange; liveStatus?: RealtimeStatus }) {
   const router = useRouter()
   const labels = rangeLabels(range)
   const delta = data ? data.total - data.previous : 0
@@ -295,8 +300,12 @@ function ViolationsCard({ data, range }: { data: ViolationsSummary | null; range
         style={{ background: `radial-gradient(circle, ${glowColor}22 0%, transparent 70%)` }} />
 
       <div className="flex items-center justify-between relative">
-        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}>
+        <span
+          className="text-xs font-semibold uppercase tracking-widest inline-flex items-center gap-1.5"
+          style={{ color: 'var(--text-muted)', letterSpacing: '0.1em' }}
+        >
           Violations
+          {liveStatus && <LiveDot status={liveStatus} />}
         </span>
         <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{ background: `${glowColor}18`, color: glowColor }}>
@@ -366,7 +375,7 @@ const TIER_COLOR: Record<SamsaraTier, string> = {
   info:        'var(--text-muted)',
 }
 
-function SamsaraAlertsTile({ rows, range }: { rows: SamsaraRow[] | null; range: DateRange }) {
+function SamsaraAlertsTile({ rows, range, liveStatus }: { rows: SamsaraRow[] | null; range: DateRange; liveStatus?: RealtimeStatus }) {
   const labels = rangeLabels(range)
   const visible = (rows ?? [])
     .filter(r => r.count > 0 && SAMSARA_META[r.alertType])
@@ -392,6 +401,7 @@ function SamsaraAlertsTile({ rows, range }: { rows: SamsaraRow[] | null; range: 
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
           Samsara Alerts · {labels.tileSuffix}
         </span>
+        {liveStatus && <LiveDot status={liveStatus} />}
       </div>
 
       {rows === null ? (
@@ -443,7 +453,7 @@ function SamsaraAlertsTile({ rows, range }: { rows: SamsaraRow[] | null; range: 
   )
 }
 
-function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range: DateRange }) {
+function TopViolatedRulesTile({ rules, range, liveStatus }: { rules: TopRule[] | null; range: DateRange; liveStatus?: RealtimeStatus }) {
   const router = useRouter()
   const maxCount = rules && rules.length > 0 ? rules[0].count : 1
   const labels = rangeLabels(range)
@@ -471,6 +481,7 @@ function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Top Violated Rules · {labels.tileSuffix}
             </span>
+            {liveStatus && <LiveDot status={liveStatus} />}
             <span
               title={`Rules ranked by how often Tori matched them against incoming situations during ${labels.sub.toLowerCase()}.`}
               style={{
@@ -551,48 +562,59 @@ function TopViolatedRulesTile({ rules, range }: { rules: TopRule[] | null; range
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export function DashboardClient(initialData: Props) {
-  const [data, setData] = useState<Props>(initialData)
   const [dateRange, setDateRange] = useState<DateRange>(() => buildDateRange('today'))
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   const [secondsAgo, setSecondsAgo] = useState(0)
 
-  // Live windows extend to "now" — they should auto-refresh.
-  // Yesterday and Custom are fixed periods that don't change.
+  // Live windows extend to "now"; Yesterday/Custom are fixed and shouldn't
+  // burn cycles on Realtime/focus refetch.
   const isLive = dateRange.preset === 'today' || dateRange.preset === '7d' || dateRange.preset === '30d'
 
-  const fetchStats = useCallback(async (range: DateRange) => {
-    setRefreshing(true)
-    try {
-      const url = `/api/dashboard/stats?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const json = await res.json()
-        setData(json)
-        setLastUpdated(new Date())
-        setSecondsAgo(0)
-      }
-    } catch {
-      // silent fail — keep showing stale data
-    } finally {
-      setRefreshing(false)
-    }
-  }, [])
+  // Client-side fetcher that hits the existing /api/dashboard/stats endpoint.
+  // Closure over current dateRange so the hook re-fetches the right window
+  // when refetch() is called. Throws on non-OK so useLiveData's error
+  // surface picks it up; existing 'silent fail = keep stale data' behavior
+  // is preserved by the hook (data stays as previous value on throw).
+  const liveFetcher = useCallback(async () => {
+    const url = `/api/dashboard/stats?from=${encodeURIComponent(dateRange.from)}&to=${encodeURIComponent(dateRange.to)}`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`stats fetch failed: ${res.status}`)
+    return await res.json() as Props
+  }, [dateRange])
 
-  // Set initial lastUpdated client-side only (avoids hydration mismatch)
-  useEffect(() => { setLastUpdated(new Date()) }, [])
+  const {
+    data: liveData,
+    isLoading: refreshing,
+    lastUpdated,
+    refetch,
+    realtimeStatus,
+  } = useLiveData<Props>({
+    fetcher:        liveFetcher,
+    realtime:       isLive
+      ? { table: 'messages', event: 'INSERT', channel: 'dashboard-live' }
+      : null,
+    refetchOnFocus: isLive,
+    debounceMs:     1500,
+  })
 
-  // Auto-refresh every 60 seconds — only for live windows (today/7d/30d)
+  // SSR initialData covers the first paint; once useLiveData's first fetch
+  // completes (~milliseconds later) hookData takes over. Falling back like
+  // this avoids null-data flicker before the first fetcher resolves.
+  const data = liveData ?? initialData
+
+  // Re-fetch on date-range change. Skip the first mount — useLiveData's
+  // built-in initial-fetch effect already ran with the same dateRange,
+  // running it again here would double-fetch on every page load.
+  const isFirstDateRangeEffect = useRef(true)
   useEffect(() => {
-    if (!isLive) return
-    const interval = setInterval(() => fetchStats(dateRange), 60_000)
-    return () => clearInterval(interval)
-  }, [isLive, dateRange, fetchStats])
+    if (isFirstDateRangeEffect.current) {
+      isFirstDateRangeEffect.current = false
+      return
+    }
+    refetch()
+  }, [dateRange, refetch])
 
-  // Re-fetch when date range changes
-  useEffect(() => { fetchStats(dateRange) }, [dateRange, fetchStats])
-
-  // Tick the "X seconds ago" counter
+  // Tick the "Xs ago" counter every 1s — sub-minute granularity is the
+  // value-add over the stock RelativeTime component (which ticks every 15s).
   useEffect(() => {
     const tick = setInterval(() => {
       if (lastUpdated) setSecondsAgo(Math.floor((Date.now() - lastUpdated.getTime()) / 1000))
@@ -603,6 +625,12 @@ export function DashboardClient(initialData: Props) {
   function handleDateChange(range: DateRange) {
     setDateRange(range)
   }
+
+  // Tile-level Realtime status. When the date range is fixed (not live),
+  // useLiveData was constructed with realtime: null so realtimeStatus is
+  // 'disabled' and <LiveDot> renders nothing — the Refresh button is the
+  // only freshness affordance for fixed windows.
+  const tileStatus: RealtimeStatus = realtimeStatus
 
   const { stats, toriBannerMessage, openContexts, recentAlerts, toriActivity, brainStatus, violationsToday, topViolatedRules, samsaraBreakdown, healthScore } = data
   const today = format(new Date(), 'EEEE, MMMM d')
@@ -647,7 +675,7 @@ export function DashboardClient(initialData: Props) {
             </span>
           )}
           <button
-            onClick={() => fetchStats(dateRange)}
+            onClick={() => refetch()}
             disabled={refreshing}
             className="flex items-center justify-center rounded-lg transition-colors"
             style={{
@@ -821,6 +849,7 @@ export function DashboardClient(initialData: Props) {
           icon={AlertTriangle}
           glowColor="#3ecfcf"
           subtext="Across all sources"
+          liveStatus={tileStatus}
         />
         <StatCard
           label={resolvedLabel}
@@ -828,6 +857,7 @@ export function DashboardClient(initialData: Props) {
           icon={CheckCircle2}
           glowColor="#56d364"
           subtext={labels.sub}
+          liveStatus={tileStatus}
         />
         <StatCard
           label="Health Score"
@@ -835,6 +865,7 @@ export function DashboardClient(initialData: Props) {
           icon={Activity}
           glowColor={stats.healthScore >= 90 ? '#56d364' : stats.healthScore >= 70 ? '#e3b341' : '#f85149'}
           subtext="Operations health"
+          liveStatus={tileStatus}
         />
         <StatCard
           label="KB Violations"
@@ -842,8 +873,9 @@ export function DashboardClient(initialData: Props) {
           icon={ShieldCheck}
           glowColor={stats.kbViolations > 0 ? '#f85149' : '#56d364'}
           subtext="Open compliance flags"
+          liveStatus={tileStatus}
         />
-        <ViolationsCard data={violationsToday ?? null} range={dateRange} />
+        <ViolationsCard data={violationsToday ?? null} range={dateRange} liveStatus={tileStatus} />
       </div>
 
       {/* ── 3-col grid: Operations health · Samsara Alerts · Brain Status ── */}
@@ -864,6 +896,7 @@ export function DashboardClient(initialData: Props) {
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Operations health
             </span>
+            <LiveDot status={tileStatus} />
             <span
               title="Penalty-based score from AI-analyzed situations requiring attention. Samsara telematics alerts are tracked separately in the Samsara Alerts tile."
               style={{
@@ -876,7 +909,7 @@ export function DashboardClient(initialData: Props) {
         </div>
 
         {/* Samsara alerts breakdown */}
-        <SamsaraAlertsTile rows={samsaraBreakdown} range={dateRange} />
+        <SamsaraAlertsTile rows={samsaraBreakdown} range={dateRange} liveStatus={tileStatus} />
 
         {/* Brain status */}
         <div className="rounded-xl overflow-hidden" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
@@ -888,6 +921,7 @@ export function DashboardClient(initialData: Props) {
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               Brain Status
             </span>
+            <LiveDot status={tileStatus} />
           </div>
 
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -910,7 +944,7 @@ export function DashboardClient(initialData: Props) {
       </div>
 
       {/* ── Top Violated Rules ── */}
-      <TopViolatedRulesTile rules={topViolatedRules ?? null} range={dateRange} />
+      <TopViolatedRulesTile rules={topViolatedRules ?? null} range={dateRange} liveStatus={tileStatus} />
 
       {/* ── Main 2-col grid ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -921,8 +955,12 @@ export function DashboardClient(initialData: Props) {
             className="flex items-center justify-between"
             style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
           >
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+            <span
+              className="inline-flex items-center gap-2"
+              style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}
+            >
               Open Situations
+              <LiveDot status={tileStatus} />
             </span>
             <Link
               href="/inbox"
@@ -1009,8 +1047,12 @@ export function DashboardClient(initialData: Props) {
               className="flex items-center justify-between"
               style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              <span
+                className="inline-flex items-center gap-2"
+                style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}
+              >
                 Recent Alerts
+                <LiveDot status={tileStatus} />
               </span>
               <Link
                 href="/alerts"
@@ -1067,8 +1109,12 @@ export function DashboardClient(initialData: Props) {
               className="flex items-center justify-between"
               style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)' }}
             >
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+              <span
+                className="inline-flex items-center gap-2"
+                style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}
+              >
                 Tori Activity
+                <LiveDot status={tileStatus} />
               </span>
               <Link
                 href="/briefing"

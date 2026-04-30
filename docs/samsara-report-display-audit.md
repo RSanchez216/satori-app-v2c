@@ -92,6 +92,11 @@ resolved-driver pattern is applied consistently:
   this still wraps in dev, fall back to shortening the visible label
   to "Types" — tooltip content unchanged.)
 
+## Related
+
+- [docs/dashboard-live-data.md](docs/dashboard-live-data.md) —
+  how the same `useLiveData` hook is reused on `/dashboard`.
+
 ## Live data (Realtime + cache fix)
 
 - **Cache:** already configured — [page.tsx](app/(main)/reports/samsara-offenders/page.tsx)
