@@ -92,6 +92,48 @@ resolved-driver pattern is applied consistently:
   this still wraps in dev, fall back to shortening the visible label
   to "Types" — tooltip content unchanged.)
 
+## Live data (Realtime + cache fix)
+
+- **Cache:** already configured — [page.tsx](app/(main)/reports/samsara-offenders/page.tsx)
+  has `export const dynamic = 'force-dynamic'`. No change needed.
+- **Date filter:** already wired correctly — `applyPreset` / `applyCustom`
+  use `router.push(...)` to update URL params, which retriggers the
+  Server Component fetch via SSR. No change needed.
+- **Hook:** [`useLiveData`](lib/hooks/use-live-data.ts) at
+  `lib/hooks/use-live-data.ts`. Reusable for Dashboard tiles in a
+  follow-up. Generic over T so it works with both client-side fetchers
+  (returns data) and SSR-prop pages (fetcher just calls
+  `router.refresh()` and resolves).
+- **Subscription target:** `public.messages` filtered to
+  `source_id=eq.<Manas Express Samsara Alerts source id>` on INSERT.
+  Filter by `source_id` rather than the `alert_type` proposed in the
+  spec — `alert_type` is computed at query time in the RPC, not a real
+  column on `messages`.
+- **Debounce:** 1500ms. Bursts of incoming faults batch into a single
+  refetch.
+- **Pause guard:** refetch is queued (not fired) while *any* of these
+  are open: a critical-events group accordion, an event-detail
+  accordion, the Unmapped Events panel, or the custom-range modal.
+  "New data available" indicator shows during the pause; refetch fires
+  automatically when all four close.
+- **UI:** `<LiveStatusBar>` in the report header below the subtitle —
+  green-pulsing "Live" when connected, amber "Reconnecting…" on drop,
+  "Updated Xs ago" via the new `<RelativeTime>` component
+  ([components/ui/relative-time.tsx](components/ui/relative-time.tsx)),
+  cyan "New data available" while paused, and a manual Refresh button
+  with spinner. Separate from the global "Live" badge in the layout
+  header.
+- **Migration:** [supabase/migrations/20260508_enable_realtime_subscriptions.sql](supabase/migrations/20260508_enable_realtime_subscriptions.sql)
+  adds `public.messages`, `public.sources`, and `public.knowledge_base_rules`
+  to `supabase_realtime` in a single guarded `DO` block — Phase 1c
+  showed the publication was empty, which silently broke this report
+  *and* three other existing subscribers (sidebar sources count, sources
+  page, KB page). Scope was expanded from messages-only to cover all
+  three tables in one shot. Applied manually via the Supabase SQL
+  editor (MCP was down at deploy time); verified via
+  `SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`
+  returning `knowledge_base_rules, messages, sources`.
+
 ## Deferred
 
 - **Concern D — Unit Watchlist hides unresolved drivers**: the Unit

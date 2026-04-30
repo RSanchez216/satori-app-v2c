@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
   Printer, AlertTriangle, ArrowUp, ArrowDown, Minus,
   Truck, User, Calendar, Wrench, Gauge, Phone, Flame, Droplet, ZapOff,
-  ChevronRight, Info,
+  ChevronRight, Info, RefreshCw,
 } from 'lucide-react'
 import { buildDateRange } from '@/components/ui/date-filter'
 import { UnmappedEventsPanel } from '@/components/reports/UnmappedEventsPanel'
@@ -15,6 +15,13 @@ import {
   lookupFault, severityCssVar, SEVERITY_ORDER, parseFaultPair,
   type FaultSeverity,
 } from '@/lib/samsara/j1939-codes'
+import { useLiveData } from '@/lib/hooks/use-live-data'
+import { RelativeTime } from '@/components/ui/relative-time'
+
+// Source ID for "Manas Express Samsara Alerts" — used to filter the Realtime
+// subscription so unrelated message inserts (KB ingest, other Telegram
+// groups) don't trigger refetches. Stable; pinned in DB.
+const SAMSARA_SOURCE_ID = '68678f6a-7586-44c7-8bb4-72c719f1fc88'
 
 export type RangePreset = 'today' | 'yesterday' | '7d' | '30d' | 'custom'
 
@@ -135,6 +142,82 @@ function cleanExcerpt(raw: string): string {
   if (s.length > 200) s = s.slice(0, 200).trimEnd() + '…'
 
   return s
+}
+
+/**
+ * Live-data status bar: Realtime connection indicator + last-updated time +
+ * "new data available" hint (when paused) + manual Refresh button.
+ * Sits below the report subtitle in the header.
+ */
+function LiveStatusBar({
+  realtimeStatus, lastUpdated, pendingUpdate, isLoading, onRefresh,
+}: {
+  realtimeStatus: 'connecting' | 'connected' | 'disconnected' | 'disabled'
+  lastUpdated:    Date | null
+  pendingUpdate:  boolean
+  isLoading:      boolean
+  onRefresh:      () => void
+}) {
+  return (
+    <div
+      className="no-print flex items-center flex-wrap gap-3"
+      style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}
+    >
+      {realtimeStatus === 'connected' && (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="relative" style={{ width: 6, height: 6 }}>
+            <span
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'var(--severity-low)' }}
+            />
+            <span
+              className="absolute inset-0 rounded-full animate-ping"
+              style={{ background: 'var(--severity-low)', opacity: 0.6 }}
+            />
+          </span>
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>Live</span>
+        </span>
+      )}
+      {realtimeStatus === 'connecting' && (
+        <span className="inline-flex items-center gap-1.5">
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-muted)' }} />
+          Connecting…
+        </span>
+      )}
+      {realtimeStatus === 'disconnected' && (
+        <span className="inline-flex items-center gap-1.5">
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--severity-high)' }} />
+          Reconnecting…
+        </span>
+      )}
+      {lastUpdated && (
+        <span>Updated <RelativeTime date={lastUpdated} /></span>
+      )}
+      {pendingUpdate && (
+        <span style={{ color: 'var(--severity-medium)', fontWeight: 600 }}>
+          New data available
+        </span>
+      )}
+      <button
+        onClick={onRefresh}
+        disabled={isLoading}
+        className="inline-flex items-center gap-1"
+        style={{
+          background:  'transparent',
+          border:      'none',
+          color:       'var(--text-secondary)',
+          cursor:      isLoading ? 'not-allowed' : 'pointer',
+          opacity:     isLoading ? 0.6 : 1,
+          padding:     0,
+          fontSize:    11,
+          fontWeight:  500,
+        }}
+      >
+        <RefreshCw size={11} className={isLoading ? 'animate-spin' : ''} />
+        Refresh
+      </button>
+    </div>
+  )
 }
 
 /**
@@ -332,6 +415,33 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
   const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({})
   const [eventOpen, setEventOpen] = useState<Record<number, boolean>>({})
 
+  // Live-data wiring. Initial data flows via SSR props on every navigation
+  // (page is force-dynamic), so the fetcher just calls router.refresh() and
+  // resolves; data updates arrive through the next render's props.
+  const hasOpenAccordion =
+    Object.values(groupOpen).some(Boolean) ||
+    Object.values(eventOpen).some(Boolean) ||
+    showUnmapped ||
+    showCustom
+  const shouldPause = useCallback(() => hasOpenAccordion, [hasOpenAccordion])
+  const liveFetcher = useCallback(async () => {
+    router.refresh()
+    return null
+  }, [router])
+  const { lastUpdated, refetch, realtimeStatus, pendingUpdate, isLoading: liveLoading } =
+    useLiveData<null>({
+      fetcher: liveFetcher,
+      realtime: {
+        table:   'messages',
+        event:   'INSERT',
+        filter:  `source_id=eq.${SAMSARA_SOURCE_ID}`,
+        channel: 'samsara-offenders-live',
+      },
+      refetchOnFocus: true,
+      debounceMs:     1500,
+      shouldPause,
+    })
+
   // Watchlist pagination — defaults to top-25 (server-provided). "Show all"
   // toggles to a paginated view that re-fetches client-side on page change.
   const driverPag = useWatchlistPagination<DriverRow>({
@@ -436,6 +546,13 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
             <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginTop: 4 }}>
               Drivers and units with recurring alerts · {dateLabel}
             </p>
+            <LiveStatusBar
+              realtimeStatus={realtimeStatus}
+              lastUpdated={lastUpdated}
+              pendingUpdate={pendingUpdate}
+              isLoading={liveLoading}
+              onRefresh={refetch}
+            />
           </div>
 
           <div className="no-print flex items-center gap-2 flex-wrap">
