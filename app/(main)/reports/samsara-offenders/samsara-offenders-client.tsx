@@ -15,6 +15,7 @@ import {
   lookupFault, severityCssVar, SEVERITY_ORDER, parseFaultPair,
   type FaultSeverity,
 } from '@/lib/samsara/j1939-codes'
+import { lookupBehavior } from '@/lib/samsara/behavior-severity'
 import { useLiveData } from '@/lib/hooks/use-live-data'
 import { RelativeTime } from '@/components/ui/relative-time'
 import { pluralize } from '@/lib/utils'
@@ -315,24 +316,58 @@ function shortRelativeTime(iso: string): string {
 }
 
 /**
- * Inline Top Issues string for a driver row — replaces six per-category
- * columns with a single readable cell. Sorted by count desc; only
- * non-zero categories rendered.
+ * Top Issues cell for a driver row. Mirrors the unit-side <TopIssues>
+ * component exactly — severity dot · label · `× N` count, sorted by
+ * severity then count, top 3 inline with "+N more" HoverTip for the rest.
+ *
+ * Behavior-to-severity mapping lives in `lib/samsara/behavior-severity.ts`
+ * and aligns with the risk-score weights (distraction → critical, etc.).
  */
-function topIssues(d: DriverRow): string {
-  const items: Array<[string, number]> = [
-    ['Speeding',     d.speeding],
-    ['Idle',         d.idle],
-    ['Fuel Low',     d.fuelLow],
-    ['Harsh Brake',  d.harshBrake],
-    ['Distraction',  d.distraction],
-    ['DEF',          d.def],
-  ]
-  return items
-    .filter(([, n]) => n > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, n]) => `${name} ${n}`)
-    .join(' · ')
+function DriverTopIssues({ driver }: { driver: DriverRow }) {
+  const items: Array<{ key: string; count: number }> = [
+    { key: 'distraction', count: driver.distraction },
+    { key: 'speeding',    count: driver.speeding    },
+    { key: 'harshBrake',  count: driver.harshBrake  },
+    { key: 'def',         count: driver.def         },
+    { key: 'idle',        count: driver.idle        },
+    { key: 'fuelLow',     count: driver.fuelLow     },
+  ].filter(it => it.count > 0)
+
+  if (items.length === 0) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+
+  const decoded = items.map(it => ({ ...it, ...lookupBehavior(it.key) }))
+  decoded.sort((a, b) => {
+    const sev = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
+    return sev !== 0 ? sev : b.count - a.count
+  })
+  const top  = decoded.slice(0, 3)
+  const rest = decoded.slice(3)
+
+  return (
+    <span className="inline-flex items-center gap-1.5 flex-wrap" style={{ fontSize: 11, lineHeight: 1.6 }}>
+      {top.map((it, i) => (
+        <span
+          key={it.key}
+          className="inline-flex items-center gap-1"
+          style={{ whiteSpace: 'nowrap', color: 'var(--text-muted)' }}
+        >
+          {i > 0 && <span style={{ marginRight: 2 }}>·</span>}
+          <SeverityDot severity={it.severity} />
+          <span>
+            {it.label}{' '}
+            <span className="tabular-nums" style={{ opacity: 0.8 }}>× {it.count}</span>
+          </span>
+        </span>
+      ))}
+      {rest.length > 0 && (
+        <HoverTip label={rest.map(it => `${it.label} × ${it.count}`).join('\n')}>
+          <span style={{ color: 'var(--text-muted)', cursor: 'help', whiteSpace: 'nowrap' }}>
+            +{rest.length} more
+          </span>
+        </HoverTip>
+      )}
+    </span>
+  )
 }
 
 function categoriesHit(d: DriverRow): string[] {
@@ -738,9 +773,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
                       </Td>
                       <Td align="right" bold tabularNums>{d.totalAlerts}</Td>
                       <Td>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                          {topIssues(d) || '—'}
-                        </span>
+                        <DriverTopIssues driver={d} />
                       </Td>
                       <Td>
                         {d.alertTypesHit >= 3 ? (

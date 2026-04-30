@@ -24,7 +24,8 @@ resolved-driver pattern is applied consistently:
 | 8 | Unmapped pill / drilldown panel | [UnmappedEventsPanel.tsx](components/reports/UnmappedEventsPanel.tsx) | (panel = unresolved by definition) — Unit, Alert Type, Count, Last Seen, Assign action | (same) | ✓ |
 | 9 | Cross-cat badge tooltip | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) | (categories list — out of scope) | (categories list — out of scope) | N/A |
 | 10 | Driver names in Show-all paginated views | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`useWatchlistPagination` + same row template) | Same row component as top-25 view | Same row component as top-25 view | ✓ |
-| 11 | Unit Watchlist – Top Issues column | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`<TopIssues>` helper, line ~140s) | Top 3 decoded `(description, count)` pairs each prefixed with a severity dot, sorted by severity then count; "+N more" with HoverTip listing the rest; `—` when empty | (same — unit-side, not driver-side) | ✓ |
+| 11 | Unit Watchlist – Top Issues column | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`<TopIssues>` helper) | Top 3 decoded `(description, count)` pairs each prefixed with a severity dot, sorted by severity then count, count rendered as `× N` slightly muted; "+N more" with HoverTip listing the rest; `—` when empty | (same — unit-side, not driver-side) | ✓ |
+| 12 | Driver Watchlist – Top Issues column | [samsara-offenders-client.tsx](app/(main)/reports/samsara-offenders/samsara-offenders-client.tsx) (`<DriverTopIssues>` helper) | Top 3 behavior categories with severity dot · label · `× N` count, sorted by severity then count; severity from `lib/samsara/behavior-severity.ts`; "+N more" with HoverTip; `—` when empty. Visually identical to Surface 11 | (same — applies regardless of driver-mapping status) | ✓ |
 
 ## Final state
 
@@ -138,6 +139,23 @@ resolved-driver pattern is applied consistently:
   editor (MCP was down at deploy time); verified via
   `SELECT tablename FROM pg_publication_tables WHERE pubname = 'supabase_realtime'`
   returning `knowledge_base_rules, messages, sources`.
+
+## Behavior severity alignment
+
+- Driver Top Issues column now renders with the same pattern as Unit
+  Top Issues: severity dot · label · `× N` count, sorted by severity
+  then count, "+N more" HoverTip beyond the top 3.
+- Behavior → severity mapping in
+  [lib/samsara/behavior-severity.ts](lib/samsara/behavior-severity.ts),
+  aligned with the Driver Watchlist risk-score weights:
+  distraction (× 5) → critical, speeding/harshBrake/DEF (× 3) → warning,
+  idle/fuelLow (× 1) → degraded.
+- Keys are camelCase to match the `DriverRow` field names already in
+  use (`harshBrake`, `fuelLow`); `lookupBehavior` normalizes other
+  forms (snake_case, kebab-case, display labels) defensively.
+- One visual language across mechanical faults (J1939 SPN/FMI codes)
+  and human behaviors — both surfaces use `SEVERITY_ORDER`,
+  `<SeverityDot>`, and the same dot/label/`× N` JSX template.
 
 ## Deferred
 
