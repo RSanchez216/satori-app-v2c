@@ -17,6 +17,7 @@ import {
 } from '@/lib/samsara/j1939-codes'
 import { useLiveData } from '@/lib/hooks/use-live-data'
 import { RelativeTime } from '@/components/ui/relative-time'
+import { pluralize } from '@/lib/utils'
 
 // Source ID for "Manas Express Samsara Alerts" — used to filter the Realtime
 // subscription so unrelated message inserts (KB ingest, other Telegram
@@ -378,32 +379,35 @@ function driverDisplayForCoaching(d: DriverRow): string {
 }
 
 function coachingForDriver(d: DriverRow): string {
-  const top  = dominantDriverIssue(d)
-  const who  = driverDisplayForCoaching(d)
+  const top   = dominantDriverIssue(d)
+  const who   = driverDisplayForCoaching(d)
+  const flags = pluralize(d.totalAlerts, 'time')
   switch (top) {
     case 'distraction':
-      return `${who} flagged ${d.totalAlerts} times — top issue: distracted driving (${d.distraction} events). Recommend a 1:1 coaching session focused on phone use and inattention.`
+      return `${who} flagged ${flags} — top issue: distracted driving (${pluralize(d.distraction, 'event')}). Recommend a 1:1 coaching session focused on phone use and inattention.`
     case 'speeding':
-      return `${who} flagged ${d.totalAlerts} times — top issue: speeding (${d.speeding} events). Recommend posted-limit refresher and a week of close monitoring.`
+      return `${who} flagged ${flags} — top issue: speeding (${pluralize(d.speeding, 'event')}). Recommend posted-limit refresher and a week of close monitoring.`
     case 'harshBrake':
-      return `${who} flagged ${d.totalAlerts} times — top issue: harsh braking (${d.harshBrake} events). Recommend defensive-driving and following-distance coaching.`
+      return `${who} flagged ${flags} — top issue: harsh braking (${pluralize(d.harshBrake, 'event')}). Recommend defensive-driving and following-distance coaching.`
     case 'def':
-      return `${who} flagged ${d.totalAlerts} times — top issue: DEF system (${d.def} events). Verify driver has been trained on DEF refill procedure.`
+      return `${who} flagged ${flags} — top issue: DEF system (${pluralize(d.def, 'event')}). Verify driver has been trained on DEF refill procedure.`
     case 'idle':
-      return `${who} flagged ${d.totalAlerts} times — top issue: excessive idling (${d.idle} events). Review idle-reduction policy and route-planning habits.`
+      return `${who} flagged ${flags} — top issue: excessive idling (${pluralize(d.idle, 'event')}). Review idle-reduction policy and route-planning habits.`
     case 'fuelLow':
-      return `${who} flagged ${d.totalAlerts} times — top issue: fuel-low warnings (${d.fuelLow} events). Coach on pre-trip inspections and fuel-stop planning.`
+      return `${who} flagged ${flags} — top issue: fuel-low warnings (${pluralize(d.fuelLow, 'event')}). Coach on pre-trip inspections and fuel-stop planning.`
   }
 }
 
 function coachingForUnit(u: UnitRow): string {
+  const faults = pluralize(u.faultCount, 'fault')
+  const types  = pluralize(u.faultCodesDistinct, 'different issue type')
   if (u.faultCount >= 20 && u.faultCodesDistinct >= 5) {
-    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different issue types — recommend pulling out of rotation for shop diagnostic.`
+    return `Unit ${u.unitId} had ${faults} across ${types} — recommend pulling out of rotation for shop diagnostic.`
   }
   if (u.faultCount >= 10) {
-    return `Unit ${u.unitId} had ${u.faultCount} faults across ${u.faultCodesDistinct} different issue types — recommend shop diagnostic visit.`
+    return `Unit ${u.unitId} had ${faults} across ${types} — recommend shop diagnostic visit.`
   }
-  return `Unit ${u.unitId} had ${u.faultCount} faults — schedule routine maintenance check.`
+  return `Unit ${u.unitId} had ${faults} — schedule routine maintenance check.`
 }
 
 export function SamsaraOffendersClient({ from, to, preset, overview, drivers, driversTotal, units, unitsTotal, critical }: Props) {
@@ -637,7 +641,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
           >
             <AlertTriangle size={13} style={{ color: 'var(--severity-high)' }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
-              {overview.unmappedDrivers} unmapped driver{overview.unmappedDrivers === 1 ? '' : 's'} in this window
+              {pluralize(overview.unmappedDrivers, 'unmapped driver')} in this window
             </span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               · alerts may predate the assignment file or reference units not in the TMS export
@@ -768,7 +772,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
               </tbody>
             </table>
           )}
-          <WatchlistFooter pag={driverPag} label="drivers" />
+          <WatchlistFooter pag={driverPag} label="driver" />
         </section>
 
         {/* ── 2. Unit Watchlist ── */}
@@ -847,7 +851,7 @@ export function SamsaraOffendersClient({ from, to, preset, overview, drivers, dr
               </tbody>
             </table>
           )}
-          <WatchlistFooter pag={unitPag} label="units" />
+          <WatchlistFooter pag={unitPag} label="unit" />
         </section>
 
         {/* ── 3. Critical Events (two-level accordion) ── */}
@@ -1281,12 +1285,16 @@ function mapUnitRow(r: Record<string, unknown>): UnitRow {
   }
 }
 
-/* Watchlist footer: "Showing X of N · Show all" or pager controls */
+/* Watchlist footer: "Showing X of N · Show all" or pager controls.
+ * `label` is the SINGULAR noun ('driver', 'unit'); the footer pluralizes the
+ * `total`-side label so a single-record list reads "Showing 1 of 1 driver"
+ * not "1 drivers". The "Showing M of N" cardinality is governed by total. */
 function WatchlistFooter<T>({ pag, label }: { pag: WatchlistPagination<T>; label: string }) {
   const { rows, expanded, page, totalPages, total, loading, showAll, collapse, next, prev } = pag
   if (total <= PAGE_SIZE && !expanded) return null
   const fromIdx = total === 0 ? 0 : page * PAGE_SIZE + 1
   const toIdx   = page * PAGE_SIZE + rows.length
+  const noun    = total === 1 ? label : label + 's'
 
   return (
     <div
@@ -1295,8 +1303,8 @@ function WatchlistFooter<T>({ pag, label }: { pag: WatchlistPagination<T>; label
     >
       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
         {expanded
-          ? `Showing ${fromIdx.toLocaleString()}–${toIdx.toLocaleString()} of ${total.toLocaleString()} ${label}`
-          : `Showing ${rows.length.toLocaleString()} of ${total.toLocaleString()} ${label}`}
+          ? `Showing ${fromIdx.toLocaleString()}–${toIdx.toLocaleString()} of ${total.toLocaleString()} ${noun}`
+          : `Showing ${rows.length.toLocaleString()} of ${total.toLocaleString()} ${noun}`}
         {loading && <Loader2Inline />}
       </span>
       <div className="flex items-center gap-2" style={{ marginLeft: 'auto' }}>

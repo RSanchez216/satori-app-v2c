@@ -6,6 +6,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { X, Loader2, Plus, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { AssignmentModal } from '@/components/sources/AssignmentModal'
+import { pluralize } from '@/lib/utils'
 
 type UnmappedRow = {
   unitId:     string
@@ -156,7 +157,7 @@ export function UnmappedEventsPanel({ open, onClose, fromISO, toISO, onChanged }
           ) : (
             <>
               <div style={{ padding: '10px 20px', fontSize: 11, color: 'var(--text-muted)' }}>
-                {totalEvents.toLocaleString()} unmapped event{totalEvents === 1 ? '' : 's'} across {totalUnits} unit{totalUnits === 1 ? '' : 's'}
+                {pluralize(totalEvents, 'unmapped event')} across {pluralize(totalUnits, 'unit')}
               </div>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
