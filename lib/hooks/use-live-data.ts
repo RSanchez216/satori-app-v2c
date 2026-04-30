@@ -72,10 +72,22 @@ export function useLiveData<T>(opts: UseLiveDataOptions<T>): UseLiveDataResult<T
   const shouldPauseRef = useRef(shouldPause); shouldPauseRef.current = shouldPause
   const debounceTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Minimum spinner duration so manual Refresh / focus refetch / Realtime
+  // pulse give visible feedback even when the underlying fetcher resolves
+  // instantly — common for SSR-prop pages where the "fetcher" is just
+  // router.refresh() (fire-and-forget; no Promise tied to the re-render).
+  // 500ms is long enough to register as intentional, short enough to feel
+  // responsive.
+  const SPIN_MIN_MS = 500
+
   const refetch = useCallback(async () => {
+    setIsLoading(true)
     try {
       setError(null)
-      const result = await fetcherRef.current()
+      const [result] = await Promise.all([
+        fetcherRef.current(),
+        new Promise<void>(resolve => setTimeout(resolve, SPIN_MIN_MS)),
+      ])
       setData(result)
       setLastUpdated(new Date())
       setPendingUpdate(false)
