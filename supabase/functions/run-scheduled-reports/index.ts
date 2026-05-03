@@ -3,8 +3,13 @@
 // Orchestrates all time-based Tori tasks.
 // Triggered by a Supabase cron job every minute: * * * * *
 //
-// Reads from the `briefings` table and fires tori-evening-briefing
-// for each briefing whose send_time matches the current local time.
+// Reads from the `briefings` table and fires the appropriate engine for
+// each briefing whose send_time matches the current local time:
+//
+//   briefing_type = 'legacy' (or NULL)  → tori-evening-briefing
+//   briefing_type = 'watchlist'         → generate-briefing  (Phase 3)
+//   briefing_type = 'alert_digest'      → generate-briefing  (Phase 6)
+//   briefing_type = 'drill_in'          → generate-briefing  (Phase 8)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -33,7 +38,7 @@ Deno.serve(async (_req: Request) => {
   try {
     const { data: briefings, error } = await supabase
       .from('briefings')
-      .select('id, name, frequency, weekly_day, send_time, timezone, is_enabled')
+      .select('id, name, frequency, weekly_day, send_time, timezone, is_enabled, briefing_type')
       .eq('is_enabled', true)
 
     if (error) throw new Error(`Could not load briefings: ${error.message}`)
@@ -61,14 +66,39 @@ Deno.serve(async (_req: Request) => {
         continue
       }
 
-      const fnUrl = `${SUPABASE_URL}/functions/v1/tori-evening-briefing`
-      const res   = await fetch(fnUrl, {
-        method:  'POST',
-        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ briefing_id: b.id }),
-      })
-      const result = await res.json().catch(() => ({ ok: false, error: 'non-JSON' }))
-      triggered.push({ id: b.id, name: b.name, result })
+      // Branch by briefing_type. Legacy rows (and NULL for any unmigrated
+      // row) keep going to the existing engine — zero behavior change.
+      // New v2 templates route to generate-briefing, which Phase 3 will
+      // implement; until then it returns 501 and we record a clean
+      // "deferred" history row so the UX is honest.
+      const type = b.briefing_type ?? 'legacy'
+
+      if (type === 'legacy') {
+        const fnUrl = `${SUPABASE_URL}/functions/v1/tori-evening-briefing`
+        const res   = await fetch(fnUrl, {
+          method:  'POST',
+          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ briefing_id: b.id }),
+        })
+        const result = await res.json().catch(() => ({ ok: false, error: 'non-JSON' }))
+        triggered.push({ id: b.id, name: b.name, type, result })
+      } else {
+        // Phase 2 stub branch. generate-briefing isn't deployed yet, so
+        // we don't fetch — that would just produce a 404. Record a
+        // skipped/error history row so the UI shows the briefing tried
+        // to fire and the user knows why nothing arrived.
+        const stubMessage = 'Phase 3 deployment pending — generate-briefing not yet available.'
+        console.log(`[run-scheduled-reports] stub for ${b.id} (${b.name}, type=${type}): ${stubMessage}`)
+        await supabase.from('briefing_history').insert({
+          briefing_id:          b.id,
+          status:               'error',
+          recipients_attempted: 0,
+          recipients_succeeded: 0,
+          message_preview:      null,
+          error_message:        stubMessage,
+        })
+        triggered.push({ id: b.id, name: b.name, type, result: { ok: false, error: stubMessage } })
+      }
     }
 
     return new Response(
