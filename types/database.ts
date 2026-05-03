@@ -217,6 +217,26 @@ export interface ToriSettings {
   updated_at: string
 }
 
+export type BriefingType = 'legacy' | 'watchlist' | 'alert_digest' | 'drill_in'
+
+export type BriefingScope =
+  | Record<string, never>                                // legacy
+  | { source_type: 'samsara' }                           // watchlist
+  | {                                                    // alert_digest (Phase 6)
+      topic_ids?:         string[]
+      source_ids?:        string[]
+      severities?:        string[]
+      departments?:       string[]
+      keywords?:          string[]
+      exclude_topic_ids?:  string[]
+      exclude_source_ids?: string[]
+    }
+  | {                                                    // drill_in (Phase 8)
+      entity_type: 'driver' | 'broker' | 'dispatcher' | 'unit'
+      entity_name: string
+      alt_names?:  string[]
+    }
+
 export interface Briefing {
   id: string
   name: string
@@ -229,6 +249,9 @@ export interface Briefing {
   topics: string[]
   departments: string[]
   min_severity: string
+  briefing_type: BriefingType
+  scope: BriefingScope
+  is_default: boolean
   created_at: string
   updated_at: string
 }

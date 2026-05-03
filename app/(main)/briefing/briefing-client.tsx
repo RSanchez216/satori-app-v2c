@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
   Bot, Plus, Send, Trash2, Copy, Pencil, RefreshCw,
   Loader2, ChevronDown, X, CheckCircle2, XCircle,
-  Moon, Sun, Calendar, Mail, Clock,
+  Moon, Sun, Calendar, Mail, Clock, ExternalLink,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type {
   BriefingWithRecipients, BriefingRecipient,
   BriefingHistory, RecipientResult,
+  BriefingType, BriefingScope,
 } from '@/types/database'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,6 +49,16 @@ const STATUS_STYLE: Record<string, { color: string; label: string }> = {
   success: { color: 'var(--severity-low)',      label: 'Sent' },
   partial: { color: 'var(--severity-high)',     label: 'Partial' },
   error:   { color: 'var(--severity-critical)', label: 'Error' },
+}
+
+// v2 briefing-type pill colors. legacy = neutral grey (existing rows
+// pre-template architecture); watchlist = accent cyan; alert_digest /
+// drill_in are unreachable in v1 modal but defined for forward-compat.
+const TYPE_BADGE: Record<string, { bg: string; color: string; label: string }> = {
+  legacy:       { bg: '#1e2530',                 color: '#8a92a3',         label: 'Legacy' },
+  watchlist:    { bg: 'rgba(62,207,207,0.1)',    color: '#3ecfcf',         label: 'Watchlist' },
+  alert_digest: { bg: 'rgba(227,179,65,0.08)',   color: 'var(--severity-high)', label: 'Alert digest' },
+  drill_in:     { bg: 'rgba(179,146,240,0.12)',  color: 'var(--kb-purple)', label: 'Drill-in' },
 }
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
@@ -727,9 +739,38 @@ function BriefingCard({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <p style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>{briefing.name}</p>
+                {(() => {
+                  const t = TYPE_BADGE[briefing.briefing_type ?? 'legacy'] ?? TYPE_BADGE.legacy
+                  return (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: t.bg, color: t.color }}>
+                      {t.label}
+                    </span>
+                  )
+                })()}
                 <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: freq.bg, color: freq.color }}>
                   {freq.label}
                 </span>
+                {briefing.is_default && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                    background: 'rgba(86,211,100,0.1)', color: 'var(--severity-low)',
+                    letterSpacing: '0.04em', textTransform: 'uppercase',
+                  }}>
+                    Default
+                  </span>
+                )}
+                <Link
+                  href={`/briefing/${briefing.id}`}
+                  title="View detail"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    fontSize: 11, color: 'var(--text-muted)', textDecoration: 'none',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--accent)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)' }}
+                >
+                  <ExternalLink size={11} /> Detail
+                </Link>
               </div>
               {briefing.description && (
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>{briefing.description}</p>
@@ -951,13 +992,31 @@ interface ModalForm {
   name: string; description: string
   frequency: 'daily' | 'weekly' | 'monthly'; weekly_day: number
   send_time: string; topics: string[]; min_severity: string
+  briefing_type: BriefingType
+  scope: BriefingScope
+  is_default: boolean
 }
 
-type ModalRecipient = { channel: 'telegram' | 'email'; target: string; label: string }
+type ModalRecipient = {
+  channel: 'telegram' | 'email'
+  target: string
+  label: string
+  send_voice: boolean
+}
 
 const DEFAULT_FORM: ModalForm = {
   name: '', description: '', frequency: 'daily',
   weekly_day: 1, send_time: '18:00', topics: ['all'], min_severity: 'low',
+  // New briefings default to watchlist (the only v1-enabled type).
+  briefing_type: 'watchlist',
+  scope: { source_type: 'samsara' },
+  is_default: false,
+}
+
+type TelegramSourceOption = {
+  id: string
+  name: string
+  chat_id: string   // resolved from telegram_chat_id ?? telegram_group_id
 }
 
 function BriefingModal({
@@ -970,19 +1029,65 @@ function BriefingModal({
   saving: boolean
 }) {
   const [form, setForm] = useState<ModalForm>(() => mode === 'edit' && briefing ? {
-    name:         briefing.name,
-    description:  briefing.description ?? '',
-    frequency:    briefing.frequency,
-    weekly_day:   briefing.weekly_day ?? 1,
-    send_time:    briefing.send_time,
-    topics:       briefing.topics ?? ['all'],
-    min_severity: briefing.min_severity ?? 'low',
+    name:          briefing.name,
+    description:   briefing.description ?? '',
+    frequency:     briefing.frequency,
+    weekly_day:    briefing.weekly_day ?? 1,
+    send_time:     briefing.send_time,
+    topics:        briefing.topics ?? ['all'],
+    min_severity:  briefing.min_severity ?? 'low',
+    // v2 fields — fall back to legacy when migrating an existing row pre-v2 column.
+    briefing_type: briefing.briefing_type ?? 'legacy',
+    scope:         briefing.scope ?? {},
+    is_default:    briefing.is_default ?? false,
   } : { ...DEFAULT_FORM })
 
   const [recipients, setRecipients] = useState<ModalRecipient[]>([])
-  const [addCh,  setAddCh]  = useState<'telegram' | 'email'>('telegram')
-  const [addTgt, setAddTgt] = useState('')
-  const [addLbl, setAddLbl] = useState('')
+  const [addCh,    setAddCh]    = useState<'telegram' | 'email'>('telegram')
+  const [addTgt,   setAddTgt]   = useState('')
+  const [addLbl,   setAddLbl]   = useState('')
+  const [addVoice, setAddVoice] = useState(false)
+  // 'dropdown' = pick from sources; 'custom' = free-text chat_id (kept for
+  // chats not yet registered as a source). UI flips when user clicks "Custom…".
+  const [addTgMode, setAddTgMode] = useState<'dropdown' | 'custom'>('dropdown')
+
+  // Fetch active Telegram sources once on modal open. Empty list falls back
+  // to free-text input only.
+  const [telegramSources, setTelegramSources] = useState<TelegramSourceOption[]>([])
+  useEffect(() => {
+    let cancelled = false
+    const supabase = createClient()
+    supabase
+      .from('sources')
+      .select('id, name, telegram_chat_id, telegram_group_id')
+      .eq('type', 'telegram')
+      .eq('is_active', true)
+      .order('name')
+      .then(({ data }) => {
+        if (cancelled) return
+        const opts: TelegramSourceOption[] = (data ?? [])
+          .map(s => {
+            const chatId = (s.telegram_chat_id as string | null)
+              ?? (s.telegram_group_id != null ? String(s.telegram_group_id) : null)
+            return chatId ? { id: s.id as string, name: s.name as string, chat_id: chatId } : null
+          })
+          .filter((x): x is TelegramSourceOption => x !== null)
+        setTelegramSources(opts)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // When switching to/from Telegram, reset the picker mode + draft target
+  // so old text doesn't leak across channels.
+  useEffect(() => {
+    if (addCh !== 'telegram') setAddTgMode('dropdown')
+    setAddTgt('')
+  }, [addCh])
+
+  // Lock the type selector when editing an existing legacy row — Phase 2
+  // doesn't allow promoting legacy → watchlist (would change engine routing
+  // mid-life of a briefing).
+  const lockType = mode === 'edit' && form.briefing_type === 'legacy'
 
   function set<K extends keyof ModalForm>(k: K, v: ModalForm[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -997,8 +1102,13 @@ function BriefingModal({
 
   function addRecipient() {
     if (!addTgt.trim()) return
-    setRecipients(r => [...r, { channel: addCh, target: addTgt.trim(), label: addLbl.trim() }])
-    setAddTgt(''); setAddLbl('')
+    setRecipients(r => [...r, {
+      channel:    addCh,
+      target:     addTgt.trim(),
+      label:      addLbl.trim(),
+      send_voice: addCh === 'telegram' ? addVoice : false,
+    }])
+    setAddTgt(''); setAddLbl(''); setAddVoice(false)
   }
 
   return (
@@ -1033,6 +1143,64 @@ function BriefingModal({
               <FieldLabel>Description <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></FieldLabel>
               <Input value={form.description} onChange={v => set('description', v)} placeholder="Daily operational summary" />
             </div>
+          </div>
+
+          {/* Briefing type — v2 selector. legacy is locked when editing an
+              existing pre-v2 row; alert_digest / drill_in show as 'soon'
+              disabled options for v1. */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 14 }}>Briefing type</p>
+            <select
+              value={form.briefing_type}
+              onChange={e => {
+                const t = e.target.value as BriefingType
+                if (lockType) return
+                set('briefing_type', t)
+                // When switching to watchlist, lock the scope to Samsara.
+                if (t === 'watchlist') set('scope', { source_type: 'samsara' })
+                if (t === 'legacy')    set('scope', {})
+              }}
+              disabled={lockType}
+              style={{
+                width: '100%',
+                background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none',
+                cursor: lockType ? 'not-allowed' : 'pointer',
+                opacity: lockType ? 0.7 : 1,
+              }}
+            >
+              {/* Legacy is selectable only when already locked-in (existing row). */}
+              {form.briefing_type === 'legacy' && (
+                <option value="legacy">Legacy briefing (existing)</option>
+              )}
+              <option value="watchlist">Watchlist</option>
+              <option value="alert_digest" disabled>Alert digest — soon</option>
+              <option value="drill_in"     disabled>Drill-in — soon</option>
+            </select>
+            {lockType && (
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                Legacy briefing — created before v2 templates. Type can&apos;t be changed in this version.
+              </p>
+            )}
+
+            {/* Scope display — varies per type. v1: only watchlist has a
+                concrete scope (locked to Samsara); legacy reads existing
+                topic/severity below; alert_digest / drill_in unreachable. */}
+            {form.briefing_type === 'watchlist' && (
+              <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+                display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  Source
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Samsara
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+                  Locked for this template
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Schedule */}
@@ -1080,7 +1248,11 @@ function BriefingModal({
             </div>
           </div>
 
-          {/* Filters */}
+          {/* Filters — legacy-only. Watchlist scope is already set above
+              (locked to Samsara) and the legacy topic/severity columns
+              are ignored by the watchlist handler. Hiding them avoids
+              confusion. */}
+          {form.briefing_type === 'legacy' && (
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: 14 }}>Filters</p>
 
@@ -1120,6 +1292,7 @@ function BriefingModal({
               </div>
             </div>
           </div>
+          )}
 
           {/* Recipients (new mode only) */}
           {mode === 'new' && (
@@ -1134,6 +1307,13 @@ function BriefingModal({
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', width: 60 }}>{r.channel}</span>
                       {r.label && <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{r.label}</span>}
                       <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', flex: 1 }}>{r.target}</span>
+                      {r.channel === 'telegram' && r.send_voice && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                          background: 'rgba(179,146,240,0.12)', color: 'var(--kb-purple)',
+                          letterSpacing: '0.04em', textTransform: 'uppercase',
+                        }}>Voice</span>
+                      )}
                       <button onClick={() => setRecipients(rs => rs.filter((_, j) => j !== i))}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
                         <X size={11} />
@@ -1156,16 +1336,58 @@ function BriefingModal({
                     }}>{ch === 'telegram' ? 'Telegram' : 'Email'}</button>
                   ))}
                 </div>
-                <input value={addTgt} onChange={e => setAddTgt(e.target.value)}
-                  placeholder={addCh === 'telegram' ? 'Chat ID (-100...)' : 'email@domain.com'}
-                  style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
-                    color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none',
-                    fontFamily: addCh === 'telegram' ? 'monospace' : 'inherit' }}
-                />
+
+                {/* Telegram: dropdown of connected sources, with a "Custom…"
+                    fallback for chats not yet registered. Email: free-text. */}
+                {addCh === 'telegram' && addTgMode === 'dropdown' && telegramSources.length > 0 ? (
+                  <select
+                    value={addTgt}
+                    onChange={e => {
+                      const v = e.target.value
+                      if (v === '__custom__') { setAddTgMode('custom'); setAddTgt(''); return }
+                      setAddTgt(v)
+                    }}
+                    style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                      color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none' }}
+                  >
+                    <option value="">Pick a connected Telegram chat…</option>
+                    {telegramSources.map(s => (
+                      <option key={s.id} value={s.chat_id}>{s.name}</option>
+                    ))}
+                    <option value="__custom__">Custom chat ID…</option>
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <input value={addTgt} onChange={e => setAddTgt(e.target.value)}
+                      placeholder={addCh === 'telegram' ? 'Chat ID (-100...)' : 'email@domain.com'}
+                      style={{ flex: 1, background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
+                        color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none',
+                        fontFamily: addCh === 'telegram' ? 'monospace' : 'inherit' }}
+                    />
+                    {addCh === 'telegram' && telegramSources.length > 0 && (
+                      <button type="button" onClick={() => { setAddTgMode('dropdown'); setAddTgt('') }}
+                        style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent)', background: 'transparent',
+                          border: 'none', cursor: 'pointer', padding: '4px 6px' }}>
+                        ← list
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <input value={addLbl} onChange={e => setAddLbl(e.target.value)} placeholder='Label — "Owner", "Fleet Mgr"…'
                   style={{ background: 'var(--bg-base)', border: '1px solid var(--border-subtle)', borderRadius: 6,
                     color: 'var(--text-primary)', padding: '7px 10px', fontSize: 12, outline: 'none', fontFamily: 'inherit' }}
                 />
+
+                {/* Per-recipient voice toggle — Telegram only. send_voice
+                    column already exists on briefing_recipients. */}
+                {addCh === 'telegram' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={addVoice} onChange={e => setAddVoice(e.target.checked)} />
+                    Send voice message (Tori reads aloud)
+                  </label>
+                )}
+
                 <button onClick={addRecipient} disabled={!addTgt.trim()} style={{
                   padding: '7px', borderRadius: 6, fontSize: 12, fontWeight: 600,
                   background: 'rgba(var(--accent-rgb),0.08)', color: 'var(--accent)',
@@ -1178,6 +1400,29 @@ function BriefingModal({
               </div>
             </div>
           )}
+
+          {/* Default for Dashboard tile — DB partial unique index enforces
+              that only one row can be is_default=TRUE; the API clears the
+              old default before setting a new one in a transaction. */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 18 }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={form.is_default}
+                onChange={e => set('is_default', e.target.checked)}
+                style={{ marginTop: 2 }}
+              />
+              <span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Set as default for Dashboard tile
+                </span>
+                <br />
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Only one briefing can be default. Setting this clears the previous default.
+                </span>
+              </span>
+            </label>
+          </div>
 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
@@ -1380,6 +1625,32 @@ export function BriefingClient({ initialBriefings, initialHistory }: Props) {
     if (data) setHistory(data as BriefingHistory[])
     setHistoryLoad(false)
   }, [supabase])
+
+  // Refetch the briefings list (used by Realtime + as a fallback for any
+  // place that needs to re-seed from the canonical server state).
+  const reloadBriefings = useCallback(async () => {
+    const { data } = await supabase
+      .from('briefings')
+      .select('*, briefing_recipients(*)')
+      .order('created_at')
+    if (data) setBriefings(data as BriefingWithRecipients[])
+  }, [supabase])
+
+  // ── Realtime — additive to optimistic updates. Cron-driven INSERTs into
+  //    briefing_history and any DB-side mutations to briefings (e.g. via
+  //    SQL editor) propagate to the UI within ~2s.
+  useEffect(() => {
+    const ch = supabase
+      .channel('briefings-page-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'briefings' }, () => {
+        reloadBriefings()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'briefing_history' }, () => {
+        reloadHistory()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [supabase, reloadBriefings, reloadHistory])
 
   // ── Toggle enable ──────────────────────────────────────────────────────────
 
