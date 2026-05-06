@@ -73,32 +73,24 @@ Deno.serve(async (_req: Request) => {
       // "deferred" history row so the UX is honest.
       const type = b.briefing_type ?? 'legacy'
 
-      if (type === 'legacy') {
-        const fnUrl = `${SUPABASE_URL}/functions/v1/tori-evening-briefing`
-        const res   = await fetch(fnUrl, {
-          method:  'POST',
-          headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ briefing_id: b.id }),
-        })
-        const result = await res.json().catch(() => ({ ok: false, error: 'non-JSON' }))
-        triggered.push({ id: b.id, name: b.name, type, result })
-      } else {
-        // Phase 2 stub branch. generate-briefing isn't deployed yet, so
-        // we don't fetch — that would just produce a 404. Record a
-        // skipped/error history row so the UI shows the briefing tried
-        // to fire and the user knows why nothing arrived.
-        const stubMessage = 'Phase 3 deployment pending — generate-briefing not yet available.'
-        console.log(`[run-scheduled-reports] stub for ${b.id} (${b.name}, type=${type}): ${stubMessage}`)
-        await supabase.from('briefing_history').insert({
-          briefing_id:          b.id,
-          status:               'error',
-          recipients_attempted: 0,
-          recipients_succeeded: 0,
-          message_preview:      null,
-          error_message:        stubMessage,
-        })
-        triggered.push({ id: b.id, name: b.name, type, result: { ok: false, error: stubMessage } })
-      }
+      // Two engines coexist: legacy briefings keep the old narrative
+      // engine; v2 templates route to the structured engine. The
+      // engine writes to briefing_history itself; we just fire-and-record.
+      // dispatch=false because Phase 4 hasn't shipped deliver-briefing yet
+      // — generate-briefing logs and skips push when dispatch is true,
+      // but explicit is safer.
+      const fnName = type === 'legacy' ? 'tori-evening-briefing' : 'generate-briefing'
+      const fnBody = type === 'legacy'
+        ? { briefing_id: b.id }
+        : { briefing_id: b.id, dispatch: false }
+      const fnUrl  = `${SUPABASE_URL}/functions/v1/${fnName}`
+      const res    = await fetch(fnUrl, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fnBody),
+      })
+      const result = await res.json().catch(() => ({ ok: false, error: 'non-JSON' }))
+      triggered.push({ id: b.id, name: b.name, type, fn: fnName, result })
     }
 
     return new Response(
