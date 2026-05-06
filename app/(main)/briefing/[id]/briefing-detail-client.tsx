@@ -11,6 +11,8 @@ import { RelativeTime } from '@/components/ui/relative-time'
 import type {
   BriefingWithRecipients, BriefingHistory,
 } from '@/types/database'
+import type { WatchlistPayload } from '@/lib/briefings/types'
+import { WatchlistRenderer } from './render-watchlist'
 
 const STATUS_STYLE: Record<string, { color: string; label: string }> = {
   success: { color: 'var(--severity-low)',      label: 'Sent' },
@@ -220,7 +222,12 @@ export function BriefingDetailClient({ initialBriefing, initialHistory }: Props)
 
       {/* Tab body */}
       {tab === 'latest' && (
-        <LatestRunPane briefing={briefing} run={selectedRun} />
+        <LatestRunPane
+          briefing={briefing}
+          run={selectedRun}
+          isLatest={selectedRunId === null}
+          onBackToLatest={() => setSelectedRunId(null)}
+        />
       )}
       {tab === 'history' && (
         <HistoryPane
@@ -234,7 +241,14 @@ export function BriefingDetailClient({ initialBriefing, initialHistory }: Props)
 
 /* ─── Panes ────────────────────────────────────────────────────────────── */
 
-function LatestRunPane({ briefing, run }: { briefing: BriefingWithRecipients; run: BriefingHistory | null }) {
+function LatestRunPane({
+  briefing, run, isLatest, onBackToLatest,
+}: {
+  briefing:        BriefingWithRecipients
+  run:             BriefingHistory | null
+  isLatest:        boolean
+  onBackToLatest:  () => void
+}) {
   if (!run) {
     return (
       <EmptyState
@@ -260,6 +274,31 @@ function LatestRunPane({ briefing, run }: { briefing: BriefingWithRecipients; ru
         background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
         fontSize: 12, color: 'var(--text-muted)',
       }}>
+        {/* Latest / replay pill — left edge of the meta strip so the user
+            always knows whether they're looking at the freshest run. */}
+        {isLatest ? (
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+            background: 'rgba(86,211,100,0.12)', color: 'var(--severity-low)',
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}>
+            Latest
+          </span>
+        ) : (
+          <button
+            onClick={onBackToLatest}
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+              background: 'rgba(227,179,65,0.12)', color: 'var(--severity-high)',
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+              border: '1px solid rgba(227,179,65,0.25)', cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+            title="Back to latest run"
+          >
+            Past run · ← back to latest
+          </button>
+        )}
         <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: `${status.color}1f`, color: status.color }}>
           {status.label}
         </span>
@@ -325,38 +364,43 @@ function LegacyMessageBody({ text }: { text: string }) {
 }
 
 function WatchlistPlaceholder({ run }: { run: BriefingHistory }) {
-  // Phase 3 will replace this with the structured watchlist renderer
-  // (driver/unit watchlist, critical events, coaching). Until then we
-  // surface the raw payload so a developer can inspect what the engine
-  // is producing once it's wired.
-  let prettyJson: string | null = null
+  // Parse the engine's structured payload. If the row is malformed
+  // (legacy text mistakenly stored, or a pre-Phase-3 schema), fall back
+  // to a pretty-printed JSON view so the data is still inspectable.
+  let payload: WatchlistPayload | null = null
+  let parseError: string | null = null
   if (run.message_full_text) {
     try {
-      prettyJson = JSON.stringify(JSON.parse(run.message_full_text), null, 2)
-    } catch {
-      prettyJson = run.message_full_text
+      const parsed = JSON.parse(run.message_full_text)
+      if (parsed && parsed.template === 'watchlist' && parsed.schema_version === 1) {
+        payload = parsed as WatchlistPayload
+      } else {
+        parseError = `Unexpected payload shape (template=${parsed?.template}, schema_version=${parsed?.schema_version}).`
+      }
+    } catch (e) {
+      parseError = `Could not parse run payload as JSON: ${e instanceof Error ? e.message : 'unknown'}`
     }
+  } else {
+    parseError = 'No payload recorded for this run.'
   }
+
+  if (payload) return <WatchlistRenderer payload={payload} />
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        Phase 3 will add the structured watchlist renderer (driver/unit
-        watchlists, critical events, coaching). Latest payload preview below.
-      </p>
-      {prettyJson ? (
+    <div style={{
+      padding: '14px 16px', borderRadius: 10,
+      background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
+      fontSize: 12, color: 'var(--text-muted)',
+    }}>
+      <p style={{ marginBottom: 8, fontStyle: 'italic' }}>{parseError}</p>
+      {run.message_full_text && (
         <pre style={{
-          padding: '14px 16px', borderRadius: 10,
-          background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)',
-          fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+          margin: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.5,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-          margin: 0, fontFamily: 'monospace', maxHeight: 480, overflowY: 'auto',
+          maxHeight: 320, overflowY: 'auto',
         }}>
-          {prettyJson}
+          {run.message_full_text}
         </pre>
-      ) : (
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', padding: '14px 16px' }}>
-          No payload recorded for this run yet.
-        </p>
       )}
     </div>
   )
